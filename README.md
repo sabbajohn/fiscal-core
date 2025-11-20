@@ -142,12 +142,23 @@ src/
     ImpressaoInterface.php
     TributacaoInterface.php
     ProdutoInterface.php
+    DocumentoInterface.php
+    ConsultaPublicaInterface.php
 
-  Adapters/           # Implementações que integram com bibliotecas externas (nfephp-org)
+  Adapters/           # Implementações que integram com bibliotecas externas
     NFeAdapter.php
     NFCeAdapter.php
     NFSeAdapter.php
     ImpressaoAdapter.php
+    IBPTAdapter.php
+    GTINAdapter.php
+    DocumentoAdapter.php
+    BrasilAPIAdapter.php
+
+  Support/            # Classes utilitárias e gerenciamento centralizado
+    CertificateManager.php    # Singleton para certificados digitais
+    ConfigManager.php         # Singleton para configurações fiscais
+    ToolsFactory.php          # Factory para NFePHP Tools
     IBPTAdapter.php
     GTINAdapter.php
 
@@ -176,18 +187,73 @@ Testes
 vendor/bin/phpunit
 ```
 
+## Gerenciamento Centralizado (Singletons)
+
+O fiscal-core inclui singletons para centralizar configurações e certificados:
+
+### CertificateManager
+```php
+use freeline\FiscalCore\Support\CertificateManager;
+
+// Carrega certificado uma única vez
+$certManager = CertificateManager::getInstance();
+$certManager->loadFromFile('/path/to/cert.pfx', 'password');
+
+// Reutiliza em qualquer lugar
+$cnpj = $certManager->getCnpj();
+$isValid = $certManager->isValid();
+$daysLeft = $certManager->getDaysUntilExpiration();
+```
+
+### ConfigManager
+```php
+use freeline\FiscalCore\Support\ConfigManager;
+
+// Configurações centralizadas
+$configManager = ConfigManager::getInstance();
+$configManager->set('ambiente', 2); // homologação
+$configManager->set('uf', 'SP');
+$configManager->set('csc', 'SEU_CSC');
+
+// Acesso em qualquer adapter
+$isProduction = $configManager->isProduction();
+$nfeConfig = $configManager->getNFeConfig();
+```
+
+### ToolsFactory
+```php
+use freeline\FiscalCore\Support\ToolsFactory;
+
+// Setup rápido para desenvolvimento
+ToolsFactory::setupForDevelopment(['uf' => 'SP']);
+
+// Cria Tools pré-configurados
+$nfeTools = ToolsFactory::createNFeTools();
+$adapter = new NFeAdapter($nfeTools);
+
+// Validação de ambiente
+$validation = ToolsFactory::validateEnvironment();
+```
+
 Status do projeto
-- NFe Adapter: enviar/consultar/cancelar — disponível
-- Impressão (DANFE/DANFCE/MDFe/CTe) — disponível
-- NFCe / NFSe / IBPT / GTIN Adapters — em desenvolvimento
-- Facades — em desenvolvimento
+- ✅ NFe Adapter: enviar/consultar/cancelar
+- ✅ NFCe Adapter: emissão modelo 65
+- ✅ Impressão (DANFE/DANFCE/MDFe/CTe)
+- ✅ IBPT Adapter: cálculo de impostos
+- ✅ GTIN Adapter: validação de códigos
+- ✅ Documento Adapter: validação CPF/CNPJ
+- ✅ BrasilAPI Adapter: consultas públicas
+- ✅ Singletons: CertificateManager, ConfigManager, ToolsFactory
+- 🔄 NFSe: arquitetura provider-based (stubs implementados)
+- 🔄 Facades: orquestração de múltiplos adapters
 
 Roadmap
-- [ ] Implementar suporte completo a NFSe (emissão e consulta).
-- [ ] Implementar Adapters de IBPT (cálculo/consulta) e GTIN (validação).
-- [ ] Implementar Facades com APIs coesas (NFe/NFCe/NFSe/Impressão/Tributação).
-- [ ] Adicionar exemplos práticos de configuração de certificados digitais.
-- [ ] Publicar pacote no Packagist/GitHub Packages.
+- [ ] Implementar providers NFSe específicos por município
+- [ ] Facades com APIs coesas (NFe/NFCe/NFSe/Impressão/Tributação)
+- [ ] Service Provider para Laravel
+- [ ] Middleware para validação automática
+- [ ] Cache de consultas e configurações
+- [ ] Publicar pacote no Packagist/GitHub Packages
 - [ ] Documentação detalhada de cada Facade e Adapter.
 
 Contribuição

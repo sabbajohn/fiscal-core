@@ -1,1 +1,14 @@
 vendor/*
+.env
+
+# Certificados
+certs/*
+
+# Scripts PHP
+scripts/*.php
+scripts/artisan-examples/*
+scripts/adapters/*
+scripts/
+
+
+.DS_Store

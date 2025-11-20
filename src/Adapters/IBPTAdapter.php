@@ -10,9 +10,9 @@ class IBPTAdapter implements TributacaoInterface
     private Ibpt $client;
     private string $ufDefault;
 
-    public function __construct(Ibpt $client, string $ufDefault = 'SP')
+    public function __construct(string $cnpj, string $token, string $ufDefault = 'SP')
     {
-        $this->client = $client;
+        $this->client = new Ibpt($cnpj, $token);
         $this->ufDefault = $ufDefault;
     }
 

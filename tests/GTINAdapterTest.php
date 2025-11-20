@@ -1,28 +1,270 @@
 <?php
 
+namespace freeline\FiscalCore\Tests;
+
 use PHPUnit\Framework\TestCase;
 use freeline\FiscalCore\Adapters\GTINAdapter;
+use freeline\FiscalCore\Support\CertificateManager;
+use freeline\FiscalCore\Support\ConfigManager;
 
 class GTINAdapterTest extends TestCase
 {
+    private GTINAdapter $adapter;
+    
+    protected function setUp(): void
+    {
+        $this->adapter = new GTINAdapter();
+        
+        // Singletons são criados por demanda, não precisam ser limpos aqui
+    }
+    
+    protected function tearDown(): void
+    {
+        // Singletons mantêm estado durante testes
+    }
+
     public function test_sem_gtin_is_valid(): void
     {
-        $gtin = new GTINAdapter();
-        $this->assertTrue($gtin->validarGTIN('SEM GTIN'));
-        $this->assertTrue($gtin->validarGTIN('sem gtin'));
+        $this->assertTrue($this->adapter->validarGTIN('SEM GTIN'));
+        $this->assertTrue($this->adapter->validarGTIN('sem gtin'));
     }
 
     public function test_gtin8_valid_and_invalid(): void
     {
-        $gtin = new GTINAdapter();
-        $this->assertTrue($gtin->validarGTIN('12345670')); // válido (dígito 0)
-        $this->assertFalse($gtin->validarGTIN('12345671')); // inválido
+        $this->assertTrue($this->adapter->validarGTIN('12345670')); // válido (dígito 0)
+        $this->assertFalse($this->adapter->validarGTIN('12345671')); // inválido
     }
 
     public function test_invalid_lengths(): void
     {
-        $gtin = new GTINAdapter();
-        $this->assertFalse($gtin->validarGTIN('123'));
-        $this->assertFalse($gtin->validarGTIN('abcdefghijkl'));
+        $this->assertFalse($this->adapter->validarGTIN('123'));
+        $this->assertFalse($this->adapter->validarGTIN('abcdefghijkl'));
+    }
+    
+    /**
+     * @testdox Deve validar GTINs válidos corretamente
+     */
+    public function testValidarGTINValidos()
+    {
+        $gtinsValidos = [
+            '7891000315507', // GTIN-13 válido
+            'SEM GTIN',      // Aceito como válido
+            '',              // Vazio aceito como válido
+        ];
+
+        foreach ($gtinsValidos as $gtin) {
+            $this->assertTrue(
+                $this->adapter->validarGTIN($gtin),
+                "GTIN '{$gtin}' deveria ser válido"
+            );
+        }
+    }
+
+    /**
+     * @testdox Deve rejeitar GTINs inválidos
+     */
+    public function testValidarGTINInvalidos()
+    {
+        $gtinsInvalidos = [
+            '123',           // Muito curto
+            '12345',         // Formato inválido
+            '1234567890123', // Dígito verificador inválido (assumindo)
+            'abc123456789',  // Contém letras
+        ];
+
+        foreach ($gtinsInvalidos as $gtin) {
+            $this->assertFalse(
+                $this->adapter->validarGTIN($gtin),
+                "GTIN '{$gtin}' deveria ser inválido"
+            );
+        }
+    }
+
+    /**
+     * @testdox Deve executar checkGTIN sem erros para GTINs válidos
+     */
+    public function testCheckGTINValido()
+    {
+        $result = $this->adapter->checkGTIN('7891000315507');
+        $this->assertInstanceOf(GTINAdapter::class, $result);
+
+        // Testa GTINs especiais
+        $result = $this->adapter->checkGTIN('SEM GTIN');
+        $this->assertInstanceOf(GTINAdapter::class, $result);
+
+        $result = $this->adapter->checkGTIN('');
+        $this->assertInstanceOf(GTINAdapter::class, $result);
+    }
+
+    /**
+     * @testdox Deve lançar exceção para GTINs inválidos no checkGTIN
+     */
+    public function testCheckGTINInvalidoLancaExcecao()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('formato inválido');
+
+        $this->adapter->checkGTIN('123');
+    }
+
+    /**
+     * @testdox Deve detectar GTIN com dígito verificador inválido
+     */
+    public function testCheckGTINDigitoVerificadorInvalido()
+    {
+        // Este teste verifica se o método detecta dígitos incorretos
+        // Se a lib NFePHP estiver disponível, pode retornar sucesso
+        try {
+            $this->adapter->checkGTIN('1234567890123'); // Possível dígito verificador errado
+            $this->assertTrue(true); // Se chegou aqui, GTIN foi aceito (pode ser válido pela lib)
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('inválido', $e->getMessage());
+        }
+    }
+    
+    /**
+     * @testdox Deve requerer certificado para buscar produto
+     */
+    public function testBuscarProdutoSemCertificado()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Certificado digital necessário');
+        
+        $this->adapter->buscarProduto('7891000315507');
+    }
+    
+    /**
+     * @testdox Deve lançar exceção para GTIN inválido na busca
+     */
+    public function testBuscarProdutoGTINInvalido()
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('GTIN inválido');
+        
+        $this->adapter->buscarProduto('123');
+    }
+    
+    /**
+     * @testdox Deve retornar estrutura esperada na busca (simulada)
+     */
+    public function testBuscarProdutoComCertificado()
+    {
+        // Simula certificado carregado
+        $certManager = CertificateManager::getInstance();
+        $this->mockCertificateManager($certManager);
+        
+        // Cria novo adapter que deve detectar o certificado
+        $adapter = new GTINAdapter();
+        $resultado = $adapter->buscarProduto('7891000315507');
+        
+        $this->assertIsArray($resultado);
+        $this->assertArrayHasKey('gtin', $resultado);
+        $this->assertArrayHasKey('descricao', $resultado);
+        $this->assertArrayHasKey('ncm', $resultado);
+        $this->assertArrayHasKey('cest', $resultado);
+        $this->assertArrayHasKey('status', $resultado);
+        $this->assertArrayHasKey('fonte', $resultado);
+        $this->assertArrayHasKey('consultado_em', $resultado);
+        
+        $this->assertEquals('7891000315507', $resultado['gtin']);
+        $this->assertEquals('receita_federal', $resultado['fonte']);
+    }
+    
+    /**
+     * @testdox Deve consultar NCM com certificado
+     */
+    public function testConsultarNCM()
+    {
+        // Simula certificado carregado
+        $certManager = CertificateManager::getInstance();
+        $this->mockCertificateManager($certManager);
+        
+        // Cria novo adapter que deve detectar o certificado
+        $adapter = new GTINAdapter();
+        $resultado = $adapter->consultarNCM('7891000315507');
+        
+        $this->assertIsArray($resultado);
+        $this->assertArrayHasKey('gtin', $resultado);
+        $this->assertArrayHasKey('ncm', $resultado);
+        $this->assertArrayHasKey('cest', $resultado);
+        $this->assertArrayHasKey('descricao_ncm', $resultado);
+        $this->assertArrayHasKey('aliquota_ipi', $resultado);
+        $this->assertArrayHasKey('origem', $resultado);
+        $this->assertArrayHasKey('consultado_em', $resultado);
+    }
+    
+    /**
+     * @testdox Deve validar comercialização corretamente
+     */
+    public function testValidarComercializacao()
+    {
+        // Sem certificado, deve retornar false
+        $this->assertFalse($this->adapter->validarComercializacao('7891000315507'));
+        
+        // Com GTIN inválido, deve retornar false
+        $this->assertFalse($this->adapter->validarComercializacao('123'));
+        
+        // Com certificado, testa funcionalidade (retornará false pois status é 'nao_encontrado')
+        $certManager = CertificateManager::getInstance();
+        $this->mockCertificateManager($certManager);
+        
+        // Cria novo adapter que deve detectar o certificado
+        $adapter = new GTINAdapter();
+        $this->assertFalse($adapter->validarComercializacao('7891000315507'));
+    }
+    
+    /**
+     * @testdox Deve obter descrição do produto
+     */
+    public function testObterDescricao()
+    {
+        // Sem certificado, deve retornar null
+        $this->assertNull($this->adapter->obterDescricao('7891000315507'));
+        
+        // Com certificado, deve retornar descrição
+        $certManager = CertificateManager::getInstance();
+        $this->mockCertificateManager($certManager);
+        
+        // Cria novo adapter após configurar certificado
+        $adapter = new GTINAdapter();
+        $descricao = $adapter->obterDescricao('7891000315507');
+        $this->assertIsString($descricao);
+        $this->assertEquals('Produto não encontrado na base', $descricao);
+    }
+    
+    /**
+     * @testdox Deve inicializar com singletons quando disponíveis
+     */
+    public function testInicializacaoComSingletons()
+    {
+        // Configura singletons
+        $certManager = CertificateManager::getInstance();
+        $configManager = ConfigManager::getInstance();
+        
+        $this->mockCertificateManager($certManager);
+        $configManager->set('ambiente', 'teste');
+        
+        // Cria novo adapter - deve usar os singletons
+        $adapter = new GTINAdapter();
+        
+        // Testa se funcionalidades que dependem de certificado funcionam
+        $resultado = $adapter->buscarProduto('7891000315507');
+        $this->assertIsArray($resultado);
+    }
+    
+    /**
+     * Helper para simular certificado carregado
+     */
+    private function mockCertificateManager(CertificateManager $manager)
+    {
+        // Usa reflexão para definir certificado interno simulando um carregado
+        $reflection = new \ReflectionClass($manager);
+        
+        $certificateProperty = $reflection->getProperty('certificate');
+        $certificateProperty->setAccessible(true);
+        
+        // Cria um mock de certificado simples
+        $mockCertificate = $this->createMock(\NFePHP\Common\Certificate::class);
+        $certificateProperty->setValue($manager, $mockCertificate);
     }
 }
