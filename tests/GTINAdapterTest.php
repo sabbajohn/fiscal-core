@@ -10,12 +10,9 @@ use freeline\FiscalCore\Support\ConfigManager;
 class GTINAdapterTest extends TestCase
 {
     private GTINAdapter $adapter;
-    
     protected function setUp(): void
     {
         $this->adapter = new GTINAdapter();
-        
-        // Singletons são criados por demanda, não precisam ser limpos aqui
     }
     
     protected function tearDown(): void
@@ -127,6 +124,9 @@ class GTINAdapterTest extends TestCase
      */
     public function testBuscarProdutoSemCertificado()
     {
+        $certificateManager = CertificateManager::getInstance();
+        $certificateManager->clear(); // Garante que não há certificado carregado
+
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Certificado digital necessário');
         
@@ -149,25 +149,20 @@ class GTINAdapterTest extends TestCase
      */
     public function testBuscarProdutoComCertificado()
     {
-        // Simula certificado carregado
-        $certManager = CertificateManager::getInstance();
-        $this->mockCertificateManager($certManager);
         
         // Cria novo adapter que deve detectar o certificado
         $adapter = new GTINAdapter();
+        CertificateManager::reload();
         $resultado = $adapter->buscarProduto('7891000315507');
         
         $this->assertIsArray($resultado);
-        $this->assertArrayHasKey('gtin', $resultado);
-        $this->assertArrayHasKey('descricao', $resultado);
-        $this->assertArrayHasKey('ncm', $resultado);
-        $this->assertArrayHasKey('cest', $resultado);
-        $this->assertArrayHasKey('status', $resultado);
-        $this->assertArrayHasKey('fonte', $resultado);
-        $this->assertArrayHasKey('consultado_em', $resultado);
+        $this->assertArrayHasKey('sucesso', $resultado);
+        $this->assertArrayHasKey('xProd', $resultado);
+        $this->assertArrayHasKey('NCM', $resultado);
+        $this->assertArrayHasKey('CEST', $resultado);
+        $this->assertArrayHasKey('cstat', $resultado);
         
-        $this->assertEquals('7891000315507', $resultado['gtin']);
-        $this->assertEquals('receita_federal', $resultado['fonte']);
+        $this->assertEquals('21011110', $resultado['NCM']);
     }
     
     /**
@@ -175,10 +170,7 @@ class GTINAdapterTest extends TestCase
      */
     public function testConsultarNCM()
     {
-        // Simula certificado carregado
-        $certManager = CertificateManager::getInstance();
-        $this->mockCertificateManager($certManager);
-        
+        CertificateManager::reload();
         // Cria novo adapter que deve detectar o certificado
         $adapter = new GTINAdapter();
         $resultado = $adapter->consultarNCM('7891000315507');
@@ -192,25 +184,20 @@ class GTINAdapterTest extends TestCase
         $this->assertArrayHasKey('origem', $resultado);
         $this->assertArrayHasKey('consultado_em', $resultado);
     }
-    
+
     /**
-     * @testdox Deve validar comercialização corretamente
+     * @testdox Tenta encontrar o NCM oficial do produto através do nome
      */
-    public function testValidarComercializacao()
+    public function testObterNCMPorDescricaoDoProduto()
     {
-        // Sem certificado, deve retornar false
-        $this->assertFalse($this->adapter->validarComercializacao('7891000315507'));
-        
-        // Com GTIN inválido, deve retornar false
-        $this->assertFalse($this->adapter->validarComercializacao('123'));
-        
-        // Com certificado, testa funcionalidade (retornará false pois status é 'nao_encontrado')
-        $certManager = CertificateManager::getInstance();
-        $this->mockCertificateManager($certManager);
-        
-        // Cria novo adapter que deve detectar o certificado
-        $adapter = new GTINAdapter();
-        $this->assertFalse($adapter->validarComercializacao('7891000315507'));
+        // 2101.11.10
+        // Café solúvel, mesmo descafeinado
+        $descricao = 'Café Solúvel';
+        $ncm = $this->adapter->pesquisarNCM($descricao);
+
+        $this->assertIsArray($ncm);
+        $this->assertEquals("2101.11.10", $ncm[0]['codigo']);
+        $this->assertStringContainsString('Café solúvel', $ncm[0]['descricao']);
     }
     
     /**
@@ -219,17 +206,16 @@ class GTINAdapterTest extends TestCase
     public function testObterDescricao()
     {
         // Sem certificado, deve retornar null
+        CertificateManager::getInstance()->clear();
         $this->assertNull($this->adapter->obterDescricao('7891000315507'));
         
         // Com certificado, deve retornar descrição
-        $certManager = CertificateManager::getInstance();
-        $this->mockCertificateManager($certManager);
-        
-        // Cria novo adapter após configurar certificado
+        CertificateManager::reload();
+
         $adapter = new GTINAdapter();
         $descricao = $adapter->obterDescricao('7891000315507');
         $this->assertIsString($descricao);
-        $this->assertEquals('Produto não encontrado na base', $descricao);
+        $this->assertEquals('NESCAFÉ Café Solúvel Matinal 100g', $descricao);
     }
     
     /**
@@ -238,10 +224,8 @@ class GTINAdapterTest extends TestCase
     public function testInicializacaoComSingletons()
     {
         // Configura singletons
-        $certManager = CertificateManager::getInstance();
         $configManager = ConfigManager::getInstance();
         
-        $this->mockCertificateManager($certManager);
         $configManager->set('ambiente', 'teste');
         
         // Cria novo adapter - deve usar os singletons
@@ -250,21 +234,5 @@ class GTINAdapterTest extends TestCase
         // Testa se funcionalidades que dependem de certificado funcionam
         $resultado = $adapter->buscarProduto('7891000315507');
         $this->assertIsArray($resultado);
-    }
-    
-    /**
-     * Helper para simular certificado carregado
-     */
-    private function mockCertificateManager(CertificateManager $manager)
-    {
-        // Usa reflexão para definir certificado interno simulando um carregado
-        $reflection = new \ReflectionClass($manager);
-        
-        $certificateProperty = $reflection->getProperty('certificate');
-        $certificateProperty->setAccessible(true);
-        
-        // Cria um mock de certificado simples
-        $mockCertificate = $this->createMock(\NFePHP\Common\Certificate::class);
-        $certificateProperty->setValue($manager, $mockCertificate);
     }
 }

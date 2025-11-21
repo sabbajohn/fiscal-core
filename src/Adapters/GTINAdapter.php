@@ -6,14 +6,13 @@ use freeline\FiscalCore\Contracts\ProdutoInterface;
 use freeline\FiscalCore\Support\CertificateManager;
 use freeline\FiscalCore\Support\ConfigManager;
 use NFePHP\Gtin\Gtin;
-use NFePHP\Common\Certificate;
 use stdClass;
 
 use function PHPUnit\Framework\throwException;
 
 class GTINAdapter implements ProdutoInterface
 {
-    private ?Certificate $certificate = null;
+    private ?CertificateManager $certManager = null;
     private array $config = [];
     
     public function __construct()
@@ -21,9 +20,8 @@ class GTINAdapter implements ProdutoInterface
         $configManager = ConfigManager::getInstance();
         $this->config = $configManager->all();
         
-        if ($configManager->isCertificateLoaded()) {
-            $certManager = CertificateManager::getInstance();
-            $this->certificate = $certManager->getCertificate();
+        if (CertificateManager::isLoaded()) {
+            $this->certManager = CertificateManager::getInstance();
         }
     }
 
@@ -95,12 +93,12 @@ class GTINAdapter implements ProdutoInterface
             throw new \InvalidArgumentException("GTIN inválido: {$gtin}");
         }
         
-        if (!$this->certificate) {
+        if (!CertificateManager::isLoaded()) {
             throw new \RuntimeException('Certificado digital necessário para busca de produtos. Use CertificateManager::getInstance()->loadFromFile()');
         }
         
         try {
-            $checker = Gtin::check($gtin, $this->certificate);
+            $checker = Gtin::check($gtin, CertificateManager::getInstance()->getCertificate());
             $response = $this->checkResponseStatus($checker->consulta());
             return (array) $response;
         } catch (\Exception $e) {
@@ -117,32 +115,15 @@ class GTINAdapter implements ProdutoInterface
         
         return [
             'gtin' => $gtin,
-            'ncm' => $produto['ncm'] ?? null,
-            'cest' => $produto['cest'] ?? null,
-            'descricao_ncm' => $this->obterDescricaoNCM($produto['ncm'] ?? ''),
+            'ncm' => $produto['NCM'] ?? null,
+            'cest' => $produto['CEST'] ?? null,
+            'descricao_ncm' => $this->obterDescricaoNCM($produto['NCM'] ?? ''),
             'aliquota_ipi' => null, // Seria obtido da tabela TIPI
             'origem' => null, // 0=Nacional, 1=Estrangeira, etc.
             'consultado_em' => date('Y-m-d H:i:s')
         ];
     }
-    
-    /**
-     * Valida se o produto está ativo e pode ser comercializado
-     */
-    public function validarComercializacao(string $gtin): bool
-    {
-        if (!$this->validarGTIN($gtin)) {
-            return false;
-        }
-        
-        try {
-            $produto = $this->buscarProduto($gtin);
-            return $produto['status'] === 'ativo';
-        } catch (\Exception $e) {
-            return false; // Em caso de erro, considera inativo
-        }
-    }
-    
+
     /**
      * Obtém descrição oficial do produto
      */
@@ -150,7 +131,7 @@ class GTINAdapter implements ProdutoInterface
     {
         try {
             $produto = $this->buscarProduto($gtin);
-            return $produto['descricao'] ?? null;
+            return $produto['xProd'] ?? null;
         } catch (\Exception $e) {
             return null;
         }
@@ -167,8 +148,18 @@ class GTINAdapter implements ProdutoInterface
         
         // Implementação futura: consulta à tabela NCM
         // Por enquanto, retorna formato padrão
-        return "NCM {$ncm} - Consulte tabela oficial";
+        $consultasPublicas = new BrasilAPIAdapter();
+        $descricaoNcm = $consultasPublicas->consultaNcm($ncm);
+        return $descricaoNcm['descricao'] ?? "NCM {$ncm} - Consulte tabela oficial";
     }
+
+    public function pesquisarNCM(string $descricao = ''): array
+    {
+        $consultasPublicas = new BrasilAPIAdapter();
+        $response =  $consultasPublicas->pesquisarNcm($descricao);
+        return $response;
+    }
+
 	private static function checksumIsValid(string $gtin): bool
 	{
 		$digits = str_split($gtin);

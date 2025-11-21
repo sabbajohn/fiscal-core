@@ -8,6 +8,5 @@ interface ProdutoInterface
     public function checkGTIN(string $codigo): self;
     public function buscarProduto(string $gtin): array;
     public function consultarNCM(string $gtin): array;
-    public function validarComercializacao(string $gtin): bool;
     public function obterDescricao(string $gtin): ?string;
 }

@@ -37,12 +37,6 @@ class ConfigManager
             'versao' => '2.02',
             'timeout' => 30
         ],
-        'certificado' => [
-            'cert_path' => '',
-            'cert_password' => '',
-            'carregado' => false,
-            'erro' => null
-        ]
     ];
 
     private function __construct()
@@ -229,12 +223,12 @@ class ConfigManager
         $certPassword = $_ENV['FISCAL_CERT_PASSWORD'] ?? getenv('FISCAL_CERT_PASSWORD');
         
         // Sempre armazenar o caminho e senha se disponíveis
-        if ($certPath) {
-            $this->set('certificado.cert_path', $certPath);
-        }
-        if ($certPassword) {
-            $this->set('certificado.cert_password', $certPassword);
-        }
+        // if ($certPath) {
+        //     $this->set('certificado.cert_path', $certPath);
+        // }
+        // if ($certPassword) {
+        //     $this->set('certificado.cert_password', $certPassword);
+        // }
         
         if ($certPath && $certPassword && file_exists($certPath)) {
             try {
@@ -243,54 +237,54 @@ class ConfigManager
                 $certManager->loadFromFile($certPath, $certPassword);
                 
                 // Certificado carregado com sucesso
-                $this->set('certificado.carregado', true);
-                $this->set('certificado.erro', null);
+                // $this->set('certificado.carregado', true);
+                // $this->set('certificado.erro', null);
                 
                 // Armazenar informações do certificado
-                $this->set('certificado.cnpj', $certManager->getCnpj());
-                $this->set('certificado.razao_social', $certManager->getRazaoSocial());
+                // $this->set('certificado.cnpj', $certManager->getCnpj());
+                // $this->set('certificado.razao_social', $certManager->getRazaoSocial());
                 
                 $expirationDate = $certManager->getExpirationDate();
                 if ($expirationDate) {
-                    $this->set('certificado.valido_ate', $expirationDate->format('Y-m-d'));
-                    $this->set('certificado.dias_restantes', $certManager->getDaysUntilExpiration());
+                    // $this->set('certificado.valido_ate', $expirationDate->format('Y-m-d'));
+                    // $this->set('certificado.dias_restantes', $certManager->getDaysUntilExpiration());
                 }
                 
                 $this->set('certificado.valido', $certManager->isValid());
                 
             } catch (\Exception $e) {
                 // Log silencioso do erro - não quebra a aplicação
-                $this->set('certificado.erro', $e->getMessage());
-                $this->set('certificado.carregado', false);
+                // $this->set('certificado.erro', $e->getMessage());
+                // $this->set('certificado.carregado', false);
             }
         } else {
             // Certificado não configurado ou arquivo não existe
-            if ($certPath && !file_exists($certPath)) {
-                $this->set('certificado.erro', "Arquivo de certificado não encontrado: {$certPath}");
-            } elseif (!$certPath) {
-                $this->set('certificado.erro', 'FISCAL_CERT_PATH não configurado');
-            } elseif (!$certPassword) {
-                $this->set('certificado.erro', 'FISCAL_CERT_PASSWORD não configurado');
-            }
-            $this->set('certificado.carregado', false);
+            // if ($certPath && !file_exists($certPath)) {
+            //     // $this->set('certificado.erro', "Arquivo de certificado não encontrado: {$certPath}");
+            // } elseif (!$certPath) {
+            //     $this->set('certificado.erro', 'FISCAL_CERT_PATH não configurado');
+            // } elseif (!$certPassword) {
+            //     $this->set('certificado.erro', 'FISCAL_CERT_PASSWORD não configurado');
+            // }
+            // $this->set('certificado.carregado', false);
         }
     }
     
     /**
      * Verifica se o certificado foi carregado com sucesso
      */
-    public function isCertificateLoaded(): bool
-    {
-        return (bool) $this->get('certificado.carregado', false);
-    }
+    // public function isCertificateLoaded(): bool
+    // {
+    //     return (bool) $this->get('certificado.carregado', false);
+    // }
     
     /**
      * Obtém erro do certificado, se houver
      */
-    public function getCertificateError(): ?string
-    {
-        return $this->get('certificado.erro');
-    }
+    // public function getCertificateError(): ?string
+    // {
+    //     return $this->get('certificado.erro');
+    // }
     
     public function load(array $config = []): void
     {
@@ -312,38 +306,38 @@ class ConfigManager
     /**
      * Obtém a instância do CertificateManager pronta para uso
      */
-    public function getCertificateManager(): ?CertificateManager
-    {
-        if (!$this->isCertificateLoaded()) {
-            return null;
-        }
+    // public function getCertificateManager(): ?CertificateManager
+    // {
+    //     if (!$this->isCertificateLoaded()) {
+    //         return null;
+    //     }
         
-        return CertificateManager::getInstance();
-    }
+    //     return CertificateManager::getInstance();
+    // }
     
     /**
      * Obtém informações completas do certificado
      */
-    public function getCertificateInfo(): array
-    {
-        $certManager = $this->getCertificateManager();
-        if (!$certManager) {
-            return [
-                'carregado' => false,
-                'erro' => $this->getCertificateError()
-            ];
-        }
+    // public function getCertificateInfo(): array
+    // {
+    //     $certManager = $this->getCertificateManager();
+    //     if (!$certManager) {
+    //         return [
+    //             'carregado' => false,
+    //             'erro' => $this->getCertificateError()
+    //         ];
+    //     }
         
-        return [
-            'carregado' => true,
-            'cnpj' => $certManager->getCnpj(),
-            'razao_social' => $certManager->getRazaoSocial(),
-            'valido' => $certManager->isValid(),
-            'dias_restantes' => $certManager->getDaysUntilExpiration(),
-            'expiracao' => $certManager->getExpirationDate()?->format('d/m/Y H:i:s'),
-            'emissor' => $certManager->getCertificateInfo()['issuer'] ?? null
-        ];
-    }
+    //     return [
+    //         'carregado' => true,
+    //         'cnpj' => $certManager->getCnpj(),
+    //         'razao_social' => $certManager->getRazaoSocial(),
+    //         'valido' => $certManager->isValid(),
+    //         'dias_restantes' => $certManager->getDaysUntilExpiration(),
+    //         'expiracao' => $certManager->getExpirationDate()?->format('d/m/Y H:i:s'),
+    //         'emissor' => $certManager->getCertificateInfo()['issuer'] ?? null
+    //     ];
+    // }
     
     /**
      * Obtém configurações da empresa

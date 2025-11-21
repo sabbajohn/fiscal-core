@@ -19,14 +19,13 @@ class CertificateManager
     private ?string $certificatePassword = null;
     private array $config = [];
 
-    private function __construct() {
-        // Construtor privado para singleton
-    }
+    private function __construct() {}
 
     public static function getInstance(): self
     {
         if (self::$instance === null) {
             self::$instance = new self();
+            self::$instance->loadCertificate();
         }
         return self::$instance;
     }
@@ -67,12 +66,70 @@ class CertificateManager
         }
     }
 
-    /**
-     * Verifica se o certificado está carregado
-     */
-    public function isLoaded(): bool
+    public static function isLoaded(): bool
     {
-        return $this->certificate !== null;
+        $instance = self::getInstance();
+        return $instance->certificate !== null;
+    }
+    
+    public static function reload(): void
+    {
+        $instance = self::getInstance();
+        $instance->clear();
+        $instance->loadCertificate();
+    }
+
+    private function loadCertificate(): void
+    {
+        $certPath = $_ENV['FISCAL_CERT_PATH'] ?? getenv('FISCAL_CERT_PATH');
+        $certPassword = $_ENV['FISCAL_CERT_PASSWORD'] ?? getenv('FISCAL_CERT_PASSWORD');
+        
+        // Sempre armazenar o caminho e senha se disponíveis
+        // if ($certPath) {
+        //     $this->set('certificado.cert_path', $certPath);
+        // }
+        // if ($certPassword) {
+        //     $this->set('certificado.cert_password', $certPassword);
+        // }
+        
+        if ($certPath && $certPassword && file_exists($certPath)) {
+            try {
+                // Usar CertificateManager para carregar o certificado
+                $certManager = CertificateManager::getInstance();
+                $certManager->loadFromFile($certPath, $certPassword);
+                
+                // Certificado carregado com sucesso
+                // $this->set('certificado.carregado', true);
+                // $this->set('certificado.erro', null);
+                
+                // Armazenar informações do certificado
+                // $this->set('certificado.cnpj', $certManager->getCnpj());
+                // $this->set('certificado.razao_social', $certManager->getRazaoSocial());
+                
+                $expirationDate = $certManager->getExpirationDate();
+                if ($expirationDate) {
+                    // $this->set('certificado.valido_ate', $expirationDate->format('Y-m-d'));
+                    // $this->set('certificado.dias_restantes', $certManager->getDaysUntilExpiration());
+                }
+                
+                // $this->set('certificado.valido', $certManager->isValid());
+                
+            } catch (\Exception $e) {
+                // Log silencioso do erro - não quebra a aplicação
+                // $this->set('certificado.erro', $e->getMessage());
+                // $this->set('certificado.carregado', false);
+            }
+        } else {
+            // Certificado não configurado ou arquivo não existe
+            // if ($certPath && !file_exists($certPath)) {
+            //     // $this->set('certificado.erro', "Arquivo de certificado não encontrado: {$certPath}");
+            // } elseif (!$certPath) {
+            //     $this->set('certificado.erro', 'FISCAL_CERT_PATH não configurado');
+            // } elseif (!$certPassword) {
+            //     $this->set('certificado.erro', 'FISCAL_CERT_PASSWORD não configurado');
+            // }
+            // $this->set('certificado.carregado', false);
+        }
     }
 
     /**

@@ -56,6 +56,37 @@ class BrasilAPIAdapter implements ConsultaPublicaInterface
         }
     }
 
+    public function consultaNcm(string $ncm): array
+    {
+        try {
+            $ncmLimpo = preg_replace('/\D/', '', $ncm);
+            $response = $this->client->ncm()->get($ncmLimpo);
+            return $this->normalizeResponse($response);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Falha ao consultar NCM na BrasilAPI: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    public function pesquisarNcm(string $descricao = ''): array
+    {
+        try {
+            $response = $this->client->ncm()->search($descricao);
+            return $this->normalizeResponse($response);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Falha ao pesquisar NCM na BrasilAPI: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    public function listarNcms(): array
+    {
+        try {
+            $response = $this->client->ncm()->getList();
+            return $this->normalizeResponse($response);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('Falha ao listar NCMs na BrasilAPI: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
     private function normalizeResponse($response): array
     {
         if (is_array($response)) {
