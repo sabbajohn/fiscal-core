@@ -16,7 +16,7 @@ Sumário
 - Uso rápido
 - Exemplos de uso
 - Estrutura do projeto
-- Configuração e certificados
+- Configuração e certificados (ver `docs/providers-and-config.md`)
 - Testes
 - Status do projeto
 - Roadmap
