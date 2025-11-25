@@ -139,26 +139,32 @@ class GTINAdapter implements ProdutoInterface
     
     /**
      * Helper para obter descrição do NCM
+     * @deprecated Use o método pesquisarNCM em vez disso, nao implementar misto entre ferramentas
      */
-    private function obterDescricaoNCM(string $ncm): ?string
-    {
-        if (empty($ncm)) {
-            return null;
-        }
+    // private function obterDescricaoNCM(string $ncm): ?string
+    // {
+    //     if (empty($ncm)) {
+    //         return null;
+    //     }
         
-        // Implementação futura: consulta à tabela NCM
-        // Por enquanto, retorna formato padrão
-        $consultasPublicas = new BrasilAPIAdapter();
-        $descricaoNcm = $consultasPublicas->consultaNcm($ncm);
-        return $descricaoNcm['descricao'] ?? "NCM {$ncm} - Consulte tabela oficial";
-    }
+    //     // Implementação futura: consulta à tabela NCM
+    //     // Por enquanto, retorna formato padrão
+    //     $consultasPublicas = new BrasilAPIAdapter();
+    //     $descricaoNcm = $consultasPublicas->consultaNcm($ncm);
+    //     return $descricaoNcm['descricao'] ?? "NCM {$ncm} - Consulte tabela oficial";
+    // }
 
-    public function pesquisarNCM(string $descricao = ''): array
-    {
-        $consultasPublicas = new BrasilAPIAdapter();
-        $response =  $consultasPublicas->pesquisarNcm($descricao);
-        return $response;
-    }
+
+    /**
+     * Helper para obter descrição do NCM
+     * @deprecated Use o método pesquisarNCM em vez disso, nao implementar misto entre ferramentas
+     */
+    // public function pesquisarNCM(string $descricao = ''): array
+    // {
+    //     $consultasPublicas = new BrasilAPIAdapter();
+    //     $response =  $consultasPublicas->pesquisarNcm($descricao);
+    //     return $response;
+    // }
 
 	private static function checksumIsValid(string $gtin): bool
 	{
