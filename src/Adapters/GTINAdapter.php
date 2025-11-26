@@ -117,7 +117,6 @@ class GTINAdapter implements ProdutoInterface
             'gtin' => $gtin,
             'ncm' => $produto['NCM'] ?? null,
             'cest' => $produto['CEST'] ?? null,
-            'descricao_ncm' => $this->obterDescricaoNCM($produto['NCM'] ?? ''),
             'aliquota_ipi' => null, // Seria obtido da tabela TIPI
             'origem' => null, // 0=Nacional, 1=Estrangeira, etc.
             'consultado_em' => date('Y-m-d H:i:s')
