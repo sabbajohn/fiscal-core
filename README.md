@@ -248,13 +248,34 @@ Status do projeto
 - 🔄 Facades: orquestração de múltiplos adapters
 
 Roadmap
-- [ ] Implementar providers NFSe específicos por município
+
+📋 **Ver TODO completo:** [TODO.md](TODO.md)
+
+🚀 **Sistema de Providers NFSe:**
+- ✅ Estrutura base implementada (AbstractProvider, Registry, Config)
+- ⏳ Implementação ABRASF v2 pendente
+- 📚 Guia de retomada: [docs/PROVIDERS-RETOMADA.md](docs/PROVIDERS-RETOMADA.md)
+
+**Próximas features:**
+- [ ] Implementar montagem XML ABRASF v2 ([ver guia](docs/PROVIDERS-RETOMADA.md))
 - [ ] Facades com APIs coesas (NFe/NFCe/NFSe/Impressão/Tributação)
 - [ ] Service Provider para Laravel
 - [ ] Middleware para validação automática
 - [ ] Cache de consultas e configurações
 - [ ] Publicar pacote no Packagist/GitHub Packages
-- [ ] Documentação detalhada de cada Facade e Adapter.
+- [ ] Documentação detalhada de cada Facade e Adapter
+
+**Quick start para retomar:**
+```bash
+# Ver estrutura criada
+tree src/Providers config/
+
+# Rodar exemplo funcional
+php scripts/exemplo-providers-nfse.php
+
+# Ler guia completo
+cat docs/PROVIDERS-RETOMADA.md
+```
 
 Contribuição
 - Issues e PRs são bem-vindos. Antes de abrir PR:
