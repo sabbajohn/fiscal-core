@@ -1,0 +1,64 @@
+{
+  "_comment": "Configuração de providers NFSe por município",
+  "_instructions": "Para adicionar novo município, copie um bloco existente e ajuste os valores",
+  
+  "curitiba": {
+    "provider": "AbrasfV2Provider",
+    "codigo_municipio": "4106902",
+    "wsdl": "https://nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
+    "wsdl_homologacao": "https://homologacao.nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
+    "wsdl_producao": "https://nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
+    "aliquota_format": "decimal",
+    "versao": "2.02",
+    "ambiente": "homologacao"
+  },
+  
+  "campo_largo": {
+    "provider": "AbrasfV2Provider",
+    "codigo_municipio": "4104600",
+    "wsdl": "https://nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_homologacao": "https://homologacao.nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_producao": "https://nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
+    "aliquota_format": "decimal",
+    "versao": "2.02",
+    "ambiente": "homologacao"
+  },
+  
+  "joinville": {
+    "provider": "JoinvilleProvider",
+    "codigo_municipio": "4209102",
+    "wsdl": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_homologacao": "https://homologacao.nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_producao": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "aliquota_format": "percentual",
+    "versao": "2.01",
+    "ambiente": "homologacao",
+    "particularidades": {
+      "campo_extra_x": true,
+      "validacao_especial": true
+    }
+  },
+  
+  "sao_jose_dos_pinhais": {
+    "provider": "AbrasfV2Provider",
+    "codigo_municipio": "4125506",
+    "wsdl": "https://nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_homologacao": "https://homologacao.nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_producao": "https://nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
+    "aliquota_format": "decimal",
+    "versao": "2.02",
+    "ambiente": "homologacao"
+  },
+  
+  "_template": {
+    "_comment": "Template para adicionar novo município",
+    "provider": "AbrasfV2Provider",
+    "codigo_municipio": "1234567",
+    "wsdl": "https://url-do-webservice",
+    "wsdl_homologacao": "https://url-homologacao",
+    "wsdl_producao": "https://url-producao",
+    "aliquota_format": "decimal",
+    "versao": "2.02",
+    "ambiente": "homologacao"
+  }
+}
