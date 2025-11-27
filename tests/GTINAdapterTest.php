@@ -179,7 +179,7 @@ class GTINAdapterTest extends TestCase
         $this->assertArrayHasKey('gtin', $resultado);
         $this->assertArrayHasKey('ncm', $resultado);
         $this->assertArrayHasKey('cest', $resultado);
-        $this->assertArrayHasKey('descricao_ncm', $resultado);
+        // $this->assertArrayHasKey('descricao_ncm', $resultado);
         $this->assertArrayHasKey('aliquota_ipi', $resultado);
         $this->assertArrayHasKey('origem', $resultado);
         $this->assertArrayHasKey('consultado_em', $resultado);
@@ -190,6 +190,7 @@ class GTINAdapterTest extends TestCase
      */
     public function testObterNCMPorDescricaoDoProduto()
     {
+        $this->markTestSkipped("Removemos a funcionalidade pois mesclava duas fontes distintas.");
         // 2101.11.10
         // Café solúvel, mesmo descafeinado
         $descricao = 'Café Solúvel';
