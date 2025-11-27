@@ -12,3 +12,5 @@ scripts/
 
 
 .DS_Store
+files/*
+.vscode/settings.json

@@ -121,7 +121,7 @@ class ToolsFactory
             'serie_nfe' => '1',
             'serie_nfce' => '1',
             'csc' => 'GPB0JBWLUR6HWFTVEAS6RJ69GPCROFPBBB8G', // CSC de exemplo
-            'csc_id' => '000001'
+            'csc_id' => '000001',
         ];
 
         $configManager->load(array_merge($defaultConfig, $config));

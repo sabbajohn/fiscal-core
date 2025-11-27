@@ -10,11 +10,14 @@ namespace freeline\FiscalCore\Support;
  */
 class ConfigManager
 {
+    const AMBIENTE_PRODUCAO = 1;
+    const AMBIENTE_HOMOLOGACAO = 2;
+
     private static ?self $instance = null;
     private array $config = [];
     private bool $autoLoaded = false;
     private array $defaults = [
-        'ambiente' => 2, // 2=homologação, 1=produção
+        'ambiente' => self::AMBIENTE_PRODUCAO, // 2=homologação, 1=produção
         'timeout' => 60,
         'proxy' => [
             'ip' => '',
@@ -105,14 +108,18 @@ class ConfigManager
      */
     public function getNFeConfig(): array
     {
+
+        
         return [
-            'ambiente' => $this->get('ambiente'),
+            'tpAmb' => $this->get('ambiente'),
             'versao' => $this->get('versao_nfe'),
             'serie' => $this->get('serie_nfe'),
             'timeout' => $this->get('timeout'),
             'proxy' => $this->get('proxy'),
-            'uf' => $this->get('uf'),
-            'schemas' => $this->get('schemas')
+            'siglaUF' => $this->get('uf'),
+            'schemes' => $this->get('schemas'),
+            'cnpj' => CertificateManager::getInstance()->getCnpj(),
+            'razaosocial' => CertificateManager::getInstance()->getRazaoSocial(),
         ];
     }
 
@@ -290,8 +297,16 @@ class ConfigManager
     {
         $this->autoLoaded = false;
         $this->defaults = array_merge($this->defaults, $config);
+        // $this->config = $this->defaults;
+        if (!empty($config)) {
+            foreach ($config as $key => $value) {
+                $this->set($key, $value);
+            }
+            return;
+        }
         $this->autoLoadConfiguration();
     }
+    
 
     /**
      * Força recarregamento das configurações
