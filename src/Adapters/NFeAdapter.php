@@ -5,6 +5,7 @@ namespace freeline\FiscalCore\Adapters;
 use freeline\FiscalCore\Contracts\NotaFiscalInterface;
 use freeline\FiscalCore\Adapters\NF\Builder\NotaFiscalBuilder;
 use freeline\FiscalCore\Adapters\NF\Core\NotaFiscal;
+use freeline\FiscalCore\Support\ToolsFactory;
 use NFePHP\NFe\Tools;
 use NFePHP\NFe\Make;
 
@@ -16,9 +17,9 @@ class NFeAdapter implements NotaFiscalInterface
 {
     private Tools $tools;
 
-    public function __construct(Tools $tools)
+    public function __construct()
     {
-        $this->tools = $tools;
+        $this->tools = ToolsFactory::createNFeTools();
     }
 
     /**
@@ -77,5 +78,15 @@ class NFeAdapter implements NotaFiscalInterface
     public function cancelar(string $chave, string $motivo, string $protocolo): bool
     {
         return $this->tools->sefazCancela($chave, $motivo, $protocolo);
+    }
+
+    public function inutilizar(int $ano, int $cnpj, int $modelo, int $serie, int $numeroInicial, int $numeroFinal, string $justificativa): bool
+    {
+        return $this->tools->sefazInutiliza($ano, $cnpj, $modelo, $serie, $numeroInicial, $numeroFinal, $justificativa);
+    }
+
+    public function sefazStatus(string $uf = '', ?int $ambiente = null, bool $ignorarContigencia = true): string
+    {
+        return $this->tools->sefazStatus($uf, $ambiente, $ignorarContigencia);
     }
 }
