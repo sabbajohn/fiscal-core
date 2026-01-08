@@ -150,6 +150,7 @@ class ToolsFactory
      * Usado apenas para consultas e status que não requerem certificado real
      * 
      * @return \NFePHP\Common\Certificate
+     * @throws \RuntimeException Se houver erro ao gerar o certificado
      */
     private static function createDummyCertificate(): \NFePHP\Common\Certificate
     {
@@ -157,10 +158,15 @@ class ToolsFactory
         // Este certificado é usado apenas para satisfazer a API do NFePHP
         // em operações que não requerem assinatura digital real
         
-        $configPath = sys_get_temp_dir() . '/fiscal_core_openssl_' . md5(uniqid()) . '.cnf';
+        $configPath = null;
         
-        // Cria arquivo de configuração temporário do OpenSSL
-        $opensslConfig = <<<EOT
+        try {
+            // Gera nome único e seguro para arquivo temporário
+            $uniqueId = bin2hex(random_bytes(16));
+            $configPath = sys_get_temp_dir() . '/fiscal_core_openssl_' . $uniqueId . '.cnf';
+            
+            // Cria arquivo de configuração temporário do OpenSSL
+            $opensslConfig = <<<EOT
 [ req ]
 default_bits = 2048
 prompt = no
@@ -183,40 +189,72 @@ authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = critical,CA:true
 keyUsage = critical,digitalSignature,keyCertSign,cRLSign
 EOT;
-        
-        file_put_contents($configPath, $opensslConfig);
-        
-        // Gera chave privada e certificado auto-assinado
-        $privkey = openssl_pkey_new([
-            'private_key_bits' => 2048,
-            'private_key_type' => OPENSSL_KEYTYPE_RSA,
-        ]);
-        
-        $csr = openssl_csr_new([
-            'countryName' => 'BR',
-            'stateOrProvinceName' => 'SP',
-            'localityName' => 'Sao Paulo',
-            'organizationName' => 'Fiscal Core Temp',
-            'organizationalUnitName' => 'Development',
-            'commonName' => 'temp.fiscal-core.local',
-            'emailAddress' => 'temp@fiscal-core.local'
-        ], $privkey, ['config' => $configPath]);
-        
-        $cert = openssl_csr_sign($csr, null, $privkey, 1, ['config' => $configPath]);
-        
-        // Exporta certificado e chave privada
-        openssl_x509_export($cert, $certout);
-        openssl_pkey_export($privkey, $pkeyout, null, ['config' => $configPath]);
-        
-        // Cria PFX
-        $pfxData = '';
-        openssl_pkcs12_export($certout, $pfxData, $pkeyout, 'temp_password');
-        
-        // Remove arquivo temporário
-        unlink($configPath);
-        
-        // Carrega no formato que NFePHP espera
-        return \NFePHP\Common\Certificate::readPfx($pfxData, 'temp_password');
+            
+            if (file_put_contents($configPath, $opensslConfig) === false) {
+                throw new \RuntimeException("Falha ao criar arquivo de configuração OpenSSL temporário");
+            }
+            
+            // Gera chave privada
+            $privkey = openssl_pkey_new([
+                'private_key_bits' => 2048,
+                'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            ]);
+            
+            if ($privkey === false) {
+                throw new \RuntimeException("Falha ao gerar chave privada: " . openssl_error_string());
+            }
+            
+            // Gera CSR
+            $csr = openssl_csr_new([
+                'countryName' => 'BR',
+                'stateOrProvinceName' => 'SP',
+                'localityName' => 'Sao Paulo',
+                'organizationName' => 'Fiscal Core Temp',
+                'organizationalUnitName' => 'Development',
+                'commonName' => 'temp.fiscal-core.local',
+                'emailAddress' => 'temp@fiscal-core.local'
+            ], $privkey, ['config' => $configPath]);
+            
+            if ($csr === false) {
+                throw new \RuntimeException("Falha ao gerar CSR: " . openssl_error_string());
+            }
+            
+            // Assina certificado
+            $cert = openssl_csr_sign($csr, null, $privkey, 1, ['config' => $configPath]);
+            
+            if ($cert === false) {
+                throw new \RuntimeException("Falha ao assinar certificado: " . openssl_error_string());
+            }
+            
+            // Exporta certificado e chave privada
+            $certout = '';
+            if (openssl_x509_export($cert, $certout) === false) {
+                throw new \RuntimeException("Falha ao exportar certificado: " . openssl_error_string());
+            }
+            
+            $pkeyout = '';
+            if (openssl_pkey_export($privkey, $pkeyout, null, ['config' => $configPath]) === false) {
+                throw new \RuntimeException("Falha ao exportar chave privada: " . openssl_error_string());
+            }
+            
+            // Gera senha aleatória para o PFX
+            $pfxPassword = bin2hex(random_bytes(16));
+            
+            // Cria PFX
+            $pfxData = '';
+            if (openssl_pkcs12_export($certout, $pfxData, $pkeyout, $pfxPassword) === false) {
+                throw new \RuntimeException("Falha ao criar PFX: " . openssl_error_string());
+            }
+            
+            // Carrega no formato que NFePHP espera
+            return \NFePHP\Common\Certificate::readPfx($pfxData, $pfxPassword);
+            
+        } finally {
+            // Garante limpeza do arquivo temporário mesmo em caso de erro
+            if ($configPath !== null && file_exists($configPath)) {
+                @unlink($configPath);
+            }
+        }
     }
 
     /**
