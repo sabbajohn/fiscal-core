@@ -17,7 +17,7 @@ class ToolsFactory
     /**
      * Cria instância de Tools para NFe
      * 
-     * @param bool $requireCertificate Se true, exige certificado válido. Se false, permite criar Tools sem certificado.
+     * @param bool $requireCertificate Se true, exige certificado válido. Se false, cria certificado auto-assinado temporário.
      * @throws \RuntimeException Se certificado for obrigatório e não estiver carregado/válido
      */
     public static function createNFeTools(bool $requireCertificate = true): NFeTools
@@ -34,12 +34,20 @@ class ToolsFactory
             if (!$certManager->isValid()) {
                 throw new \RuntimeException('Certificado digital expirado ou inválido');
             }
+            
+            $certificate = $certManager->getCertificate();
+        } else {
+            // Para operações que não exigem certificado (como status e consultas),
+            // usa certificado carregado se disponível, ou cria um dummy se necessário
+            if ($certManager->isLoaded()) {
+                $certificate = $certManager->getCertificate();
+            } else {
+                // Cria um certificado auto-assinado temporário para operações que não exigem assinatura
+                $certificate = self::createDummyCertificate();
+            }
         }
 
         $config = json_encode($configManager->getNFeConfig());
-        
-        // Usa certificado se disponível, caso contrário passa null
-        $certificate = $certManager->isLoaded() ? $certManager->getCertificate() : null;
 
         return new NFeTools($config, $certificate);
     }
@@ -135,6 +143,80 @@ class ToolsFactory
         ];
 
         $configManager->load(array_merge($defaultConfig, $config));
+    }
+
+    /**
+     * Cria um certificado auto-assinado temporário para operações que não exigem assinatura
+     * Usado apenas para consultas e status que não requerem certificado real
+     * 
+     * @return \NFePHP\Common\Certificate
+     */
+    private static function createDummyCertificate(): \NFePHP\Common\Certificate
+    {
+        // Gera um certificado auto-assinado temporário válido por 1 dia
+        // Este certificado é usado apenas para satisfazer a API do NFePHP
+        // em operações que não requerem assinatura digital real
+        
+        $configPath = sys_get_temp_dir() . '/fiscal_core_openssl_' . md5(uniqid()) . '.cnf';
+        
+        // Cria arquivo de configuração temporário do OpenSSL
+        $opensslConfig = <<<EOT
+[ req ]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+x509_extensions = v3_ca
+
+[ dn ]
+C = BR
+ST = SP
+L = Sao Paulo
+O = Fiscal Core Temp
+OU = Development
+CN = temp.fiscal-core.local
+emailAddress = temp@fiscal-core.local
+
+[ v3_ca ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = critical,CA:true
+keyUsage = critical,digitalSignature,keyCertSign,cRLSign
+EOT;
+        
+        file_put_contents($configPath, $opensslConfig);
+        
+        // Gera chave privada e certificado auto-assinado
+        $privkey = openssl_pkey_new([
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+        ]);
+        
+        $csr = openssl_csr_new([
+            'countryName' => 'BR',
+            'stateOrProvinceName' => 'SP',
+            'localityName' => 'Sao Paulo',
+            'organizationName' => 'Fiscal Core Temp',
+            'organizationalUnitName' => 'Development',
+            'commonName' => 'temp.fiscal-core.local',
+            'emailAddress' => 'temp@fiscal-core.local'
+        ], $privkey, ['config' => $configPath]);
+        
+        $cert = openssl_csr_sign($csr, null, $privkey, 1, ['config' => $configPath]);
+        
+        // Exporta certificado e chave privada
+        openssl_x509_export($cert, $certout);
+        openssl_pkey_export($privkey, $pkeyout, null, ['config' => $configPath]);
+        
+        // Cria PFX
+        $pfxData = '';
+        openssl_pkcs12_export($certout, $pfxData, $pkeyout, 'temp_password');
+        
+        // Remove arquivo temporário
+        unlink($configPath);
+        
+        // Carrega no formato que NFePHP espera
+        return \NFePHP\Common\Certificate::readPfx($pfxData, 'temp_password');
     }
 
     /**

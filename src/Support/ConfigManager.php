@@ -17,7 +17,7 @@ class ConfigManager
     private array $config = [];
     private bool $autoLoaded = false;
     private array $defaults = [
-        'ambiente' => self::AMBIENTE_PRODUCAO, // 2=homologação, 1=produção
+        'ambiente' => self::AMBIENTE_HOMOLOGACAO, // 2=homologação, 1=produção
         'timeout' => 60,
         'proxy' => [
             'ip' => '',
@@ -108,7 +108,17 @@ class ConfigManager
      */
     public function getNFeConfig(): array
     {
-
+        $certManager = CertificateManager::getInstance();
+        
+        // Se certificado está carregado, usa dados do certificado
+        // Caso contrário, usa valores dummy (para operações sem certificado)
+        $cnpj = $certManager->isLoaded() 
+            ? $certManager->getCnpj() 
+            : '00000000000000'; // CNPJ dummy para operações sem certificado
+            
+        $razaoSocial = $certManager->isLoaded() 
+            ? $certManager->getRazaoSocial() 
+            : 'Empresa Temp'; // Razão social dummy
         
         return [
             'tpAmb' => $this->get('ambiente'),
@@ -118,8 +128,8 @@ class ConfigManager
             'proxy' => $this->get('proxy'),
             'siglaUF' => $this->get('uf'),
             'schemes' => $this->get('schemas'),
-            'cnpj' => CertificateManager::getInstance()->getCnpj(),
-            'razaosocial' => CertificateManager::getInstance()->getRazaoSocial(),
+            'cnpj' => $cnpj,
+            'razaosocial' => $razaoSocial,
         ];
     }
 
