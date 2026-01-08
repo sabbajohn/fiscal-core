@@ -69,35 +69,53 @@ Desenvolvimento local
 
 Uso rápido
 - O projeto fornece Adapters para integração direta com as libs nfephp-org. Alguns Facades existem como stubs e ainda serão implementados. Abaixo, exemplos com Adapters já funcionais.
+- **Novo**: Operações de consulta e status agora funcionam sem certificado digital! Veja [Certificado Opcional](docs/certificado-opcional.md).
 
 Exemplos de uso
 
-1) NFe: emitir, consultar e cancelar
+1) NFe: verificar status SEFAZ (sem certificado necessário)
 
 ```php
-use NfePHP\NFe\Tools;
 use freeline\FiscalCore\Adapters\NFeAdapter;
+use freeline\FiscalCore\Support\ToolsFactory;
 
-// Configuração esperada pelo NfePHP (veja a doc oficial para campos e certificados)
-$configJson = json_encode([
-    // ... suas configurações NFe (certificado, ambiente, CNPJ, UF, etc.)
-]);
+// Configurar ambiente
+ToolsFactory::setupForDevelopment(['uf' => 'SP']);
 
-$tools = new Tools($configJson);
-$nfe = new NFeAdapter($tools);
+// Verificar status - funciona SEM certificado!
+$nfe = new NFeAdapter();
+$status = $nfe->sefazStatus('SP', 2); // UF e ambiente
+```
 
-// Emissão (exemplo ilustrativo)
+2) NFe: emitir, consultar e cancelar
+
+```php
+use freeline\FiscalCore\Adapters\NFeAdapter;
+use freeline\FiscalCore\Support\CertificateManager;
+use freeline\FiscalCore\Support\ToolsFactory;
+
+// Configurar ambiente
+ToolsFactory::setupForDevelopment(['uf' => 'SP']);
+
+// Para EMISSÃO, certificado é obrigatório
+$certManager = CertificateManager::getInstance();
+$certManager->loadFromFile('/path/to/cert.pfx', 'senha');
+
+// Criar adapter
+$nfe = new NFeAdapter();
+
+// Emissão (requer certificado)
 $xmlAssinadoOuDados = [ /* seu payload/estrutura compatível */ ];
 $respostaEnvio = $nfe->emitir($xmlAssinadoOuDados);
 
-// Consulta por chave
+// Consulta por chave (funciona sem certificado também!)
 $respostaConsulta = $nfe->consultar('NFe-chave-44-dígitos');
 
-// Cancelamento
+// Cancelamento (requer certificado)
 $ok = $nfe->cancelar('NFe-chave-44-dígitos', 'Motivo do cancelamento', 'protocolo');
 ```
 
-2) Impressão: gerar DANFE/DANFCE/MDFe/CTe
+3) Impressão: gerar DANFE/DANFCE/MDFe/CTe
 
 ```php
 use freeline\FiscalCore\Adapters\ImpressaoAdapter;
