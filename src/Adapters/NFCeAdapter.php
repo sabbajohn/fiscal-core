@@ -15,11 +15,35 @@ use NFePHP\NFe\Make;
  */
 class NFCeAdapter implements NotaFiscalInterface
 {
-	private Tools $tools;
+	private ?Tools $tools = null;
+	private ?Tools $toolsWithoutCert = null;
 
-	public function __construct(Tools $tools)
+	public function __construct(?Tools $tools = null)
 	{
+		// Permite injeção de Tools, mas também suporta criação lazy
 		$this->tools = $tools;
+	}
+
+	/**
+	 * Obtém instância de Tools que requer certificado
+	 */
+	private function getTools(): Tools
+	{
+		if ($this->tools === null) {
+			$this->tools = \freeline\FiscalCore\Support\ToolsFactory::createNFCeTools(true);
+		}
+		return $this->tools;
+	}
+
+	/**
+	 * Obtém instância de Tools sem exigir certificado (para consultas e status)
+	 */
+	private function getToolsOptionalCert(): Tools
+	{
+		if ($this->toolsWithoutCert === null) {
+			$this->toolsWithoutCert = \freeline\FiscalCore\Support\ToolsFactory::createNFCeTools(false);
+		}
+		return $this->toolsWithoutCert;
 	}
 
 	/**
@@ -50,14 +74,14 @@ class NFCeAdapter implements NotaFiscalInterface
 		$xml = $make->getXML();
 		$xml = $make->monta();
 		
-		// Assina o XML
-		$xmlAssinado = $this->tools->signNFe($xml);
+		// Assina o XML (requer certificado)
+		$xmlAssinado = $this->getTools()->signNFe($xml);
 		
 		// Para NFCe, precisa adicionar QR Code antes do envio
 		// O Tools deve estar configurado com CSC/CSRT
 		
-		// Envia para SEFAZ
-		return $this->tools->sefazEnviaLote([$xmlAssinado]);
+		// Envia para SEFAZ (requer certificado)
+		return $this->getTools()->sefazEnviaLote([$xmlAssinado]);
 	}
 
 	/**
@@ -83,12 +107,26 @@ class NFCeAdapter implements NotaFiscalInterface
 
 	public function consultar(string $chave): string
 	{
-		return $this->tools->sefazConsultaChave($chave);
+		// Consulta não requer certificado (apenas leitura)
+		return $this->getToolsOptionalCert()->sefazConsultaChave($chave);
 	}
 
 	public function cancelar(string $chave, string $motivo, string $protocolo): bool
 	{
-		return $this->tools->sefazCancela($chave, $motivo, $protocolo);
+		// Cancelamento requer certificado (assinatura)
+		return $this->getTools()->sefazCancela($chave, $motivo, $protocolo);
+	}
+
+	public function inutilizar(int $ano, int $cnpj, int $modelo, int $serie, int $numeroInicial, int $numeroFinal, string $justificativa): bool
+	{
+		// Inutilização requer certificado (assinatura)
+		return $this->getTools()->sefazInutiliza($ano, $cnpj, $modelo, $serie, $numeroInicial, $numeroFinal, $justificativa);
+	}
+
+	public function sefazStatus(string $uf = '', ?int $ambiente = null, bool $ignorarContigencia = true): string
+	{
+		// Status não requer certificado (apenas consulta de disponibilidade)
+		return $this->getToolsOptionalCert()->sefazStatus($uf, $ambiente, $ignorarContigencia);
 	}
 }
 

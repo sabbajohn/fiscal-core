@@ -16,33 +16,43 @@ class ToolsFactory
 {
     /**
      * Cria instância de Tools para NFe
+     * 
+     * @param bool $requireCertificate Se true, exige certificado válido. Se false, permite criar Tools sem certificado.
+     * @throws \RuntimeException Se certificado for obrigatório e não estiver carregado/válido
      */
-    public static function createNFeTools(): NFeTools
+    public static function createNFeTools(bool $requireCertificate = true): NFeTools
     {
         $certManager = CertificateManager::getInstance();
         $configManager = ConfigManager::getInstance();
 
-        if (!$certManager->isLoaded()) {
-            throw new \RuntimeException('Certificado digital não carregado. Use CertificateManager::getInstance()->loadFromFile()');
-        }
+        // Se certificado é obrigatório, valida
+        if ($requireCertificate) {
+            if (!$certManager->isLoaded()) {
+                throw new \RuntimeException('Certificado digital não carregado. Use CertificateManager::getInstance()->loadFromFile()');
+            }
 
-        if (!$certManager->isValid()) {
-            throw new \RuntimeException('Certificado digital expirado ou inválido');
+            if (!$certManager->isValid()) {
+                throw new \RuntimeException('Certificado digital expirado ou inválido');
+            }
         }
 
         $config = json_encode($configManager->getNFeConfig());
-        $certificate = $certManager->getCertificate();
+        
+        // Usa certificado se disponível, caso contrário passa null
+        $certificate = $certManager->isLoaded() ? $certManager->getCertificate() : null;
 
         return new NFeTools($config, $certificate);
     }
 
     /**
      * Cria instância de Tools para NFCe
+     * 
+     * @param bool $requireCertificate Se true, exige certificado válido. Se false, permite criar Tools sem certificado.
      */
-    public static function createNFCeTools(): NFeTools
+    public static function createNFCeTools(bool $requireCertificate = true): NFeTools
     {
         // NFCe usa a mesma classe Tools da NFe
-        return self::createNFeTools();
+        return self::createNFeTools($requireCertificate);
     }
 
     /**
