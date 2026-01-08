@@ -10,10 +10,14 @@ scripts/artisan-examples/*
 scripts/adapters/*
 scripts/
 
-
+# Tinkerwell
+*.phar
+tinker.phar
+.tinkerwell/
 
 .DS_Store
 
 files/*
 
 .vscode/settings.json
+.phpunit.cache/test-results

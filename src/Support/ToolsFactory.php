@@ -5,17 +5,54 @@ namespace freeline\FiscalCore\Support;
 use NFePHP\NFe\Tools as NFeTools;
 use NFePHP\DA\NFe\Danfe as DanfeNFe;
 use NFePHP\DA\NFe\Danfe as DanfeNFCe;
+use freeline\FiscalCore\Support\FiscalResponse;
+use freeline\FiscalCore\Support\ResponseHandler;
+use freeline\FiscalCore\Exceptions\CertificateException;
+use freeline\FiscalCore\Exceptions\ValidationException;
 
 /**
  * Factory para criação de Tools NFePHP com configuração centralizada
  * 
  * Utiliza os singletons CertificateManager e ConfigManager
- * para fornecer instâncias pré-configuradas
+ * para fornecer instâncias pré-configuradas com tratamento de erros
  */
 class ToolsFactory
 {
+    private static ResponseHandler $responseHandler;
+    
+    private static function getResponseHandler(): ResponseHandler
+    {
+        if (!isset(self::$responseHandler)) {
+            self::$responseHandler = new ResponseHandler();
+        }
+        return self::$responseHandler;
+    }
+
+    /**
+     * Cria instância de Tools para NFe (versão safe)
+     * @return FiscalResponse Com Tools ou erro tratado
+     */
+    public static function createNFeToolsSafe(): FiscalResponse
+    {
+        return self::getResponseHandler()->handle(function() {
+            return self::createNFeTools();
+        }, 'create_nfe_tools');
+    }
+
+    /**
+     * Cria instância de Tools para NFCe (versão safe)
+     * @return FiscalResponse Com Tools ou erro tratado
+     */
+    public static function createNFCeToolsSafe(): FiscalResponse
+    {
+        return self::getResponseHandler()->handle(function() {
+            return self::createNFCeTools();
+        }, 'create_nfce_tools');
+    }
     /**
      * Cria instância de Tools para NFe
+     * @throws CertificateException Se certificado não estiver carregado ou válido
+     * @throws ValidationException Se configuração inválida
      */
     public static function createNFeTools(): NFeTools
     {
@@ -23,17 +60,32 @@ class ToolsFactory
         $configManager = ConfigManager::getInstance();
 
         if (!$certManager->isLoaded()) {
-            throw new \RuntimeException('Certificado digital não carregado. Use CertificateManager::getInstance()->loadFromFile()');
+            throw CertificateException::notLoaded();
         }
 
         if (!$certManager->isValid()) {
-            throw new \RuntimeException('Certificado digital expirado ou inválido');
+            throw CertificateException::expired();
         }
 
-        $config = json_encode($configManager->getNFeConfig());
-        $certificate = $certManager->getCertificate();
+        try {
+            $config = json_encode($configManager->getNFeConfig());
+            $certificate = $certManager->getCertificate();
 
-        return new NFeTools($config, $certificate);
+            return new NFeTools($config, $certificate);
+        } catch (\Exception $e) {
+            throw new ValidationException(
+                'Erro ao criar NFeTools: ' . $e->getMessage(),
+                0,
+                $e,
+                [
+                    'suggestions' => [
+                        'Verifique as configurações de NFe',
+                        'Confirme se o certificado está válido',
+                        'Valide o formato da configuração JSON'
+                    ]
+                ]
+            );
+        }
     }
 
     /**
@@ -59,6 +111,17 @@ class ToolsFactory
     public static function createDanfeNFCe(string $xml): DanfeNFCe
     {
         return new DanfeNFCe($xml);
+    }
+
+    /**
+     * Verifica se o ambiente está configurado corretamente (versão safe)
+     * @return FiscalResponse Com resultado da validação
+     */
+    public static function validateEnvironmentSafe(): FiscalResponse
+    {
+        return self::getResponseHandler()->handle(function() {
+            return self::validateEnvironment();
+        }, 'validate_environment');
     }
 
     /**
@@ -107,6 +170,30 @@ class ToolsFactory
     }
 
     /**
+     * Configuração rápida para desenvolvimento/testes (versão safe)
+     * @return FiscalResponse Resultado da configuração
+     */
+    public static function setupForDevelopmentSafe(array $config = []): FiscalResponse
+    {
+        return self::getResponseHandler()->handle(function() use ($config) {
+            self::setupForDevelopment($config);
+            return ['configured' => true, 'environment' => 'development'];
+        }, 'setup_development');
+    }
+
+    /**
+     * Configuração rápida para produção (versão safe)
+     * @return FiscalResponse Resultado da configuração
+     */
+    public static function setupForProductionSafe(array $config = []): FiscalResponse
+    {
+        return self::getResponseHandler()->handle(function() use ($config) {
+            self::setupForProduction($config);
+            return ['configured' => true, 'environment' => 'production'];
+        }, 'setup_production');
+    }
+
+    /**
      * Configuração rápida para desenvolvimento/testes
      */
     public static function setupForDevelopment(array $config = []): void
@@ -135,10 +222,19 @@ class ToolsFactory
         $configManager = ConfigManager::getInstance();
         
         $requiredConfigs = ['csc', 'csc_id', 'uf', 'municipio_ibge'];
+        $missingConfigs = [];
+        
         foreach ($requiredConfigs as $required) {
             if (!isset($config[$required])) {
-                throw new \InvalidArgumentException("Configuração obrigatória para produção: {$required}");
+                $missingConfigs[] = $required;
             }
+        }
+        
+        if (!empty($missingConfigs)) {
+            throw ValidationException::multipleErrors(
+                array_fill_keys($missingConfigs, 'Campo obrigatório para produção'),
+                'configuração de produção'
+            );
         }
 
         $productionConfig = array_merge([
