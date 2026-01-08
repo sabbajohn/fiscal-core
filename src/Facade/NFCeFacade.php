@@ -2,7 +2,7 @@
 
 namespace freeline\FiscalCore\Facade;
 
-use freeline\FiscalCore\Adapters\NF\NFCeAdapter;
+use freeline\FiscalCore\Adapters\NF\NFCe\NFCeAdapter;
 use freeline\FiscalCore\Adapters\ImpressaoAdapter;
 use freeline\FiscalCore\Support\ResponseHandler;
 use freeline\FiscalCore\Support\FiscalResponse;
@@ -15,9 +15,10 @@ use freeline\FiscalCore\Support\ToolsFactory;
  */
 class NFCeFacade
 {
-    private NFCeAdapter $nfce;
-    private ImpressaoAdapter $impressao;
+    private ?NFCeAdapter $nfce = null;
+    private ?ImpressaoAdapter $impressao = null;
     private ResponseHandler $responseHandler;
+    private ?FiscalResponse $initializationError = null;
 
     public function __construct(
         ?NFCeAdapter $nfce = null,
@@ -25,12 +26,44 @@ class NFCeFacade
     ) {
         $this->responseHandler = new ResponseHandler();
         
-        try {
-            $this->nfce = $nfce ?? new NFCeAdapter(ToolsFactory::createNFeTools());
-            $this->impressao = $impressao ?? new ImpressaoAdapter();
-        } catch (\Exception $e) {
-            // Se não conseguir inicializar, deixa null - será tratado nos métodos
+        if ($nfce !== null) {
+            $this->nfce = $nfce;
+        } else {
+            // Usa método safe que retorna FiscalResponse  
+            $toolsResponse = ToolsFactory::createNFCeToolsSafe();
+            if ($toolsResponse->isSuccess()) {
+                $this->nfce = new NFCeAdapter($toolsResponse->getData()['result']);
+            } else {
+                // Armazena o erro original
+                $this->initializationError = $toolsResponse;
+            }
         }
+        
+        if ($impressao !== null) {
+            $this->impressao = $impressao;
+        } else {
+            try {
+                $this->impressao = new ImpressaoAdapter();
+            } catch (\Exception $e) {
+                // Se falhar, impressao fica null
+            }
+        }
+    }
+
+    /**
+     * Verifica se o adapter está inicializado e retorna erro original se não estiver
+     */
+    private function checkNFCeInitialization(): ?FiscalResponse
+    {
+        if ($this->nfce === null) {
+            // Retorna o erro original se houver
+            return $this->initializationError ?? FiscalResponse::error(
+                'NFCe adapter não inicializado devido a erro de configuração',
+                'INITIALIZATION_ERROR',
+                'adapter_check'
+            );
+        }
+        return null;
     }
 
     /**
@@ -41,11 +74,13 @@ class NFCeFacade
      */
     public function emitir(array $dados): FiscalResponse
     {
+        // Verifica inicialização primeiro
+        $initError = $this->checkNFCeInitialization();
+        if ($initError !== null) {
+            return $initError;
+        }
+        
         return $this->responseHandler->handle(function() use ($dados) {
-            if (!isset($this->nfce)) {
-                throw new \RuntimeException('NFCe adapter não inicializado. Verifique configuração de certificado.');
-            }
-            
             // Garante que é modelo 65 (NFCe)
             if (!isset($dados['identificacao']['mod'])) {
                 $dados['identificacao']['mod'] = 65;
@@ -70,11 +105,13 @@ class NFCeFacade
      */
     public function consultar(string $chave): FiscalResponse
     {
+        // Verifica inicialização primeiro
+        $initError = $this->checkNFCeInitialization();
+        if ($initError !== null) {
+            return $initError;
+        }
+        
         return $this->responseHandler->handle(function() use ($chave) {
-            if (!isset($this->nfce)) {
-                throw new \RuntimeException('NFCe adapter não inicializado.');
-            }
-            
             if (strlen($chave) !== 44) {
                 throw new \InvalidArgumentException('Chave de acesso deve ter 44 dígitos');
             }
@@ -99,11 +136,13 @@ class NFCeFacade
      */
     public function cancelar(string $chave, string $motivo, string $protocolo): FiscalResponse
     {
+        // Verifica inicialização primeiro
+        $initError = $this->checkNFCeInitialization();
+        if ($initError !== null) {
+            return $initError;
+        }
+        
         return $this->responseHandler->handle(function() use ($chave, $motivo, $protocolo) {
-            if (!isset($this->nfce)) {
-                throw new \RuntimeException('NFCe adapter não inicializado.');
-            }
-            
             if (strlen($motivo) < 15) {
                 throw new \InvalidArgumentException('Motivo deve ter pelo menos 15 caracteres');
             }
@@ -151,11 +190,13 @@ class NFCeFacade
      */
     public function verificarStatusSefaz(string $uf = '', ?int $ambiente = null): FiscalResponse
     {
+        // Verifica inicialização primeiro
+        $initError = $this->checkNFCeInitialization();
+        if ($initError !== null) {
+            return $initError;
+        }
+        
         return $this->responseHandler->handle(function() use ($uf, $ambiente) {
-            if (!isset($this->nfce)) {
-                throw new \RuntimeException('NFCe adapter não inicializado.');
-            }
-            
             $result = $this->nfce->sefazStatus($uf, $ambiente);
             
             return [
@@ -180,11 +221,13 @@ class NFCeFacade
      */
     public function criarNota(array $dados): FiscalResponse
     {
+        // Verifica inicialização primeiro
+        $initError = $this->checkNFCeInitialization();
+        if ($initError !== null) {
+            return $initError;
+        }
+        
         return $this->responseHandler->handle(function() use ($dados) {
-            if (!isset($this->nfce)) {
-                throw new \RuntimeException('NFCe adapter não inicializado.');
-            }
-            
             if (!isset($dados['identificacao']['mod'])) {
                 $dados['identificacao']['mod'] = 65;
             }

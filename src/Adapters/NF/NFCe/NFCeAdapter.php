@@ -1,6 +1,6 @@
 <?php
 
-namespace freeline\FiscalCore\Adapters\NF;
+namespace freeline\FiscalCore\Adapters\NF\NFCe;
 
 use freeline\FiscalCore\Contracts\NotaFiscalInterface;
 use freeline\FiscalCore\Adapters\NF\Builder\NotaFiscalBuilder;

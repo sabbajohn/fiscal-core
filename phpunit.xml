@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         stopOnFailure="false"
+         cacheDirectory=".phpunit.cache">
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">tests/Unit</directory>
+        </testsuite>
+        
+        <testsuite name="Integration">
+            <directory suffix="Test.php">tests/Integration</directory>
+        </testsuite>
+        
+        <testsuite name="Tributacao">
+            <directory suffix="Test.php">tests/Unit/Tributacao</directory>
+        </testsuite>
+        
+        <testsuite name="NFe">
+            <directory suffix="Test.php">tests/Unit/NFe</directory>
+        </testsuite>
+        
+        <testsuite name="NFSe">
+            <directory suffix="Test.php">tests/Unit/NFSe</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+        <exclude>
+            <directory>src/Support/legacy</directory>
+            <file>src/Support/deprecated.php</file>
+        </exclude>
+    </source>
+
+    <coverage>
+        <report>
+            <html outputDirectory="coverage-html"/>
+            <text outputFile="php://stdout"/>
+        </report>
+    </coverage>
+
+    <logging>
+        <testdoxHtml outputFile="tests/logs/testdox.html"/>
+        <testdoxText outputFile="tests/logs/testdox.txt"/>
+        <junit outputFile="tests/logs/junit.xml"/>
+    </logging>
+
+    <php>
+        <!-- Environment variables for tests -->
+        <env name="APP_ENV" value="testing"/>
+        <env name="FISCAL_DEBUG" value="false"/>
+        
+        <!-- Test database/cache settings -->
+        <env name="CACHE_DRIVER" value="array"/>
+        
+        <!-- External APIs for integration tests -->
+        <env name="ENABLE_EXTERNAL_TESTS" value="false"/>
+        <env name="BRASIL_API_TIMEOUT" value="5"/>
+        
+        <!-- IBPT test credentials (optional) -->
+        <env name="IBPT_TEST_CNPJ" value=""/>
+        <env name="IBPT_TEST_TOKEN" value=""/>
+        
+        <!-- Certificate test paths -->
+        <env name="TEST_CERT_PATH" value=""/>
+        <env name="TEST_CERT_PASSWORD" value=""/>
+    </php>
+
+</phpunit>

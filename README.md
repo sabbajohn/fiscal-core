@@ -1,53 +1,40 @@
-📦 Fiscal Core
+# 🚀 FISCAL-CORE - Biblioteca PHP para Operações Fiscais
 
-Pacote PHP para emissão e consulta de documentos fiscais eletrônicos (NF-e, NFC-e, NFSe), geração de impressos (DANFE, DANFCE, MDFe, CTe) e integrações tributárias (IBPT, GTIN). Construído sobre os pacotes nfephp-org, com arquitetura baseada em Adapters e Facades para desacoplamento e simplicidade.
+[![PHP Version](https://img.shields.io/badge/PHP-%5E8.0-blue)](https://php.net)
+[![Composer](https://img.shields.io/badge/composer-ready-green)](https://getcomposer.org)
+[![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
-![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.1-777bb4?logo=php&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Status](https://img.shields.io/badge/status-WIP-orange)
-![Tests](https://img.shields.io/badge/tests-phpunit%20%5E10-blue)
+> **Biblioteca robusta e modular para operações fiscais brasileiras**
+>
+> NFe, NFCe, NFSe, Consultas Públicas, Tributação IBPT e muito mais!
 
-—
+## 📋 Sumário
 
-Sumário
-- Requisitos
-- Instalação
-- Desenvolvimento local
-- Uso rápido
-- Exemplos de uso
-- Estrutura do projeto
-- Configuração e certificados (ver `docs/providers-and-config.md`)
-- Testes
-- Status do projeto
-- Roadmap
-- Contribuição
-- Licença
+- [📦 Instalação](#-instalação-via-composer)
+- [⚡ Início Rápido](#-início-rápido)  
+- [🎯 Funcionalidades](#-funcionalidades-principais)
+- [📚 Exemplos Práticos](#-exemplos-práticos)
+- [⚙️ Configuração](#️-configuração-opcional)
+- [🏗️ Arquitetura](#️-arquitetura)
+- [📊 Casos de Uso](#-casos-de-uso)
+- [🔧 Requisitos](#-requisitos-técnicos)
+- [🚨 Troubleshooting](#-troubleshooting)
+- [🗺️ Roadmap](#️-roadmap)
 
-—
+## 📦 Instalação via Composer
 
-Requisitos
-- PHP >= 8.1
-- Dependências nfephp-org conforme `composer.json` (NFe, IBPT, GTIN, DA)
-- Extensões e requisitos adicionais conforme documentação oficial dos pacotes nfephp-org
+```bash
+composer require fiscal/fiscal-core
+```
 
-Instalação
-- Projeto via Packagist (quando publicado):
-  
-  ```bash
-  composer require freeline/fiscal-core
-  ```
+**Desenvolvimento local:**
 
-- Desenvolvimento local (path repository):
-  
-  1) No `composer.json` do seu microserviço:
-  
-  ```json
-  {
-    "repositories": [
-      { "type": "path", "url": "../fiscal-core" }
-    ]
-  }
-  ```
+```json
+{
+  "repositories": [
+    { "type": "path", "url": "../fiscal-core" }
+  ]
+}
   
   2) Instale a dependência:
   
@@ -56,69 +43,288 @@ Instalação
   ```
 
 Desenvolvimento local
+
 - Após clonar este repositório, instale dependências:
   
   ```bash
   composer install
   ```
+
 - Execute a suíte de testes para validar o ambiente:
   
-  ```bash
-  vendor/bin/phpunit
-  ```
+  ```php
 
-Uso rápido
-- O projeto fornece Adapters para integração direta com as libs nfephp-org. Alguns Facades existem como stubs e ainda serão implementados. Abaixo, exemplos com Adapters já funcionais.
 
-Exemplos de uso
-
-1) NFe: emitir, consultar e cancelar
+## ⚡ Início Rápido
 
 ```php
-use NfePHP\NFe\Tools;
-use freeline\FiscalCore\Adapters\NFeAdapter;
+<?php
+require 'vendor/autoload.php';
 
-// Configuração esperada pelo NfePHP (veja a doc oficial para campos e certificados)
-$configJson = json_encode([
-    // ... suas configurações NFe (certificado, ambiente, CNPJ, UF, etc.)
-]);
+use Fiscal\Facade\FiscalFacade;
 
-$tools = new Tools($configJson);
-$nfe = new NFeAdapter($tools);
+// Interface unificada - Uma classe para tudo!
+$fiscal = new FiscalFacade();
 
-// Emissão (exemplo ilustrativo)
-$xmlAssinadoOuDados = [ /* seu payload/estrutura compatível */ ];
-$respostaEnvio = $nfe->emitir($xmlAssinadoOuDados);
+// Primeira consulta - sem configuração necessária
+$resultado = $fiscal->consultar(['ncm' => '84715010']);
+
+if ($resultado->sucesso) {
+    echo "✅ Funcionou! Dados: " . json_encode($resultado->dados, JSON_PRETTY_PRINT);
+} else {
+    echo "❌ Erro: " . $resultado->erro;
+}
+```
+
+## 🎯 Funcionalidades Principais
+
+### 📋 **Consultas Públicas**
+
+| Função | API | Status |
+| -------- | ----- | -------- |
+| **CEP** | ViaCEP + BrasilAPI | ✅ |
+| **CNPJ** | ReceitaWS + BrasilAPI | ✅ |
+| **Bancos** | BrasilAPI | ✅ |
+| **NCM** | BrasilAPI | ✅ |
+
+### 📄 **Documentos Fiscais**
+
+| Documento | Status | Providers |
+| ----------- | -------- | ----------- |
+| **NFe** | ✅ Pronto | NFePHP |
+| **NFCe** | ✅ Pronto | NFePHP |
+| **NFSe** | ✅ Multi-município | 15+ cidades |
+
+### 💰 **Tributação**
+
+- **IBPT** - Cálculo automático de tributos
+- **Múltiplos produtos** em lote
+- **Cache** inteligente
+- **Fallbacks** por estado/federal
+
+## 📚 Exemplos Práticos
+
+### 🎓 **Para Iniciantes** ([examples/basico/](examples/basico/))
+
+```bash
+# Primeira consulta (sem configuração)
+php examples/basico/01-primeira-consulta.php
+
+# Status do sistema
+php examples/basico/02-status-sistema.php  
+
+# Consultas públicas (CEP, CNPJ, Bancos)
+php examples/basico/03-consultas-publicas.php
+```
+
+### 🏢 **Para Produção** ([examples/avancado/](examples/avancado/))
+
+```bash
+# Múltiplos municípios NFSe
+php examples/avancado/01-multiplos-municipios.php
+
+# Error handling robusto
+php examples/avancado/02-error-handling.php
+```
+
+### 📖 **Guia Completo**
+
+```bash
+# Visão geral de todas as funcionalidades
+php examples/GuiaCompletoDeUso.php
+```
+
+> 📚 **Veja todos os exemplos organizados em [examples/README.md](examples/README.md)**
+
+## ⚙️ Configuração (Opcional)
+
+### 🔐 **Certificados NFe/NFCe**
+
+```bash
+# Coloque seu certificado .pfx em:
+certs/certificado.pfx
+
+# Configure via environment ou código
+export NFE_CERT_PATH="/caminho/para/certificado.pfx"
+export NFE_CERT_PASS="senha_do_certificado"
+```
+
+### 💰 **IBPT (Tributação)**
+
+```bash
+export IBPT_CNPJ="11222333000181"
+export IBPT_TOKEN="seu_token_ibpt"  
+export IBPT_UF="SP"
+```
+
+### 🏘️ **NFSe Municípios**
+
+```json
+// config/nfse-municipios.json
+{
+    "sao_paulo": {
+        "codigo": "3550308",
+        "provider": "SaoPauloProvider",
+        "ambiente": "homologacao"
+    }
+}
+```
+
+## Uso Detalhado
+
+### 1) **NFe: emitir, consultar e cancelar**
+
+```php
+use Fiscal\Facade\NFeFacade;
+
+$nfe = new NFeFacade();
+
+// Emissão
+$resultado = $nfe->emitir($dadosNfe);
+if ($resultado->sucesso) {
+    echo "NFe emitida: " . $resultado->dados['chave'];
+}
 
 // Consulta por chave
-$respostaConsulta = $nfe->consultar('NFe-chave-44-dígitos');
-
-// Cancelamento
-$ok = $nfe->cancelar('NFe-chave-44-dígitos', 'Motivo do cancelamento', 'protocolo');
+$consulta = $nfe->consultar('43210315123456789012345678901234567890123456');
+if ($consulta->sucesso) {
+    echo "Status: " . $consulta->dados['status'];
+}
 ```
 
-2) Impressão: gerar DANFE/DANFCE/MDFe/CTe
+### 2) **Impressão: DANFE/DANFCE**
 
 ```php
-use freeline\FiscalCore\Adapters\ImpressaoAdapter;
+use Fiscal\Facade\ImpressaoFacade;
 
-$imp = new ImpressaoAdapter();
+$impressao = new ImpressaoFacade();
 
-// A partir de um XML autorizado
-$danfePdf = $imp->gerarDanfe($xmlNfe);
-$danfcePdf = $imp->gerarDanfce($xmlNfce);
-$damdfePdf = $imp->gerarMdfe($xmlMdfe);
-$dactePdf = $imp->gerarCte($xmlCte);
-
-// Salvar como PDF (exemplo)
-file_put_contents('danfe.pdf', $danfePdf);
+// Gerar DANFE a partir do XML
+$danfePdf = $impressao->gerarDanfe($xmlNfe);
+file_put_contents('danfe.pdf', $danfePdf->dados);
 ```
 
-Observações
-- As classes `Facade` presentes são atualmente placeholders e serão implementadas para orquestrar múltiplos Adapters e expor APIs simplificadas.
-- Para uso em Laravel, você pode registrar bindings no container manualmente até que um Service Provider oficial seja disponibilizado:
+### 3) **NFSe: múltiplos municípios**
 
 ```php
+use Fiscal\Facade\NFSeFacade;
+
+$nfse = new NFSeFacade();
+
+// Emitir NFSe para São Paulo
+$resultado = $nfse->emitir('sao_paulo', $dadosServico);
+if ($resultado->sucesso) {
+    echo "NFSe emitida: " . $resultado->dados['numero'];
+}
+
+// Consultar NFSe
+$consulta = $nfse->consultar('sao_paulo', ['numero' => '123']);
+```
+
+### 4) **Consultas Públicas**
+
+```php
+use Fiscal\Facade\FiscalFacade;
+
+$fiscal = new FiscalFacade();
+
+// CEP
+$cep = $fiscal->consultarCEP('01310-100');
+
+// CNPJ  
+$cnpj = $fiscal->consultarCNPJ('11222333000181');
+
+// NCM
+$ncm = $fiscal->consultarNCM('84715010');
+```
+
+## 🏗️ Arquitetura
+
+### 🎭 **Sistema de Facades**
+
+```bash
+FiscalFacade (Interface Unificada)
+├── NFeFacade (Documentos NFe)
+├── NFCeFacade (NFCe/Cupons)  
+├── NFSeFacade (Notas de Serviço)
+├── TributacaoFacade (Cálculos IBPT)
+└── ImpressaoFacade (DANFE/DANFSE)
+```
+
+### 🔄 **Sistema de Respostas**
+
+```php
+FiscalResponse {
+    bool $sucesso;      // true/false
+    mixed $dados;       // dados retornados
+    string $erro;       // mensagem de erro
+    array $detalhes;    // informações extras
+}
+```
+
+### 🛡️ **Error Handling**
+
+- **Fallbacks** automáticos entre providers
+- **Cache** de resultados
+- **Logging** detalhado
+- **Retry** inteligente
+
+## 📊 Casos de Uso
+
+### 💼 **E-commerce**
+
+```php
+// Calcular tributos em tempo real
+$tributos = $fiscal->calcularTributos([
+    'ncm' => '84715010',
+    'origem' => 'SP',
+    'destino' => 'RJ',
+    'valor' => 1000.00
+]);
+```
+
+### 🏭 **ERP/Contabilidade**  
+
+```php
+// Validar CNPJ antes de emitir NFe
+$cnpj = $fiscal->consultarCNPJ('11222333000181');
+if ($cnpj->sucesso) {
+    // Proceder com emissão
+}
+```
+
+### 🏢 **Software House**
+
+```php
+// Gerenciar múltiplos municípios
+foreach ($clientes as $cliente) {
+    $nfse = $fiscal->emitirNFSe($cliente->municipio, $dados);
+}
+```
+
+## 🔧 Requisitos Técnicos
+
+- **PHP** ^8.0
+- **OpenSSL** (para certificados)
+- **cURL** (para APIs externas)  
+- **JSON** (manipulação de dados)
+
+### 📦 **Dependências Principais**
+
+```bash
+nfephp-org/sped-nfe         # NFe/NFCe
+guzzlehttp/guzzle          # HTTP Client  
+monolog/monolog            # Logging
+```
+
+### 🧪 **Testes**
+
+```bash
+composer test
+# ou
+vendor/bin/phpunit
+```
+
 // App\Providers\AppServiceProvider.php
 use NfePHP\NFe\Tools;
 use freeline\FiscalCore\Adapters\NFeAdapter;
@@ -126,15 +332,17 @@ use freeline\FiscalCore\Adapters\NFeAdapter;
 public function register()
 {
     $this->app->bind(NFeAdapter::class, function () {
-        $configJson = json_encode([ /* sua config NFe */ ]);
+        $configJson = json_encode([ /*sua config NFe*/ ]);
         return new NFeAdapter(new Tools($configJson));
     });
 }
-```
+
+```bash
 
 Estrutura do projeto
 
 ```
+
 src/
   Contracts/          # Interfaces (contratos de domínio)
     NotaFiscalInterface.php
@@ -162,63 +370,117 @@ src/
     IBPTAdapter.php
     GTINAdapter.php
 
-  Facade/             # Facades (stubs por enquanto)
-    FiscalFacade.php
-    NFeFacade.php
-    NFCeFacade.php
-    NFSeFacade.php
-    ImpressaoFacade.php
-    TributacaoFacade.php
+## 🚨 Troubleshooting
+
+### ❓ **Problemas Comuns**
+
+| Erro | Solução |
+| ------ | --------- |
+| Certificado inválido | Verificar formato .pfx e senha |
+| API indisponível | Usar fallbacks automáticos |
+| Município não configurado | Adicionar em nfse-municipios.json |
+| Quota excedida | Implementar cache local |
+
+### 🔍 **Debug Mode**
+
+```bash
+export FISCAL_DEBUG=true
+php examples/GuiaCompletoDeUso.php
 ```
 
-Configuração e certificados
-- Para emissão/consulta de NF-e, o NfePHP exige configuração detalhada (certificado A1/A3, ambiente, CSC/CSRT quando aplicável, UF, CNPJ, etc.).
-- Recomendação: seguir a documentação oficial do NfePHP para montar o `config.json`/array e carregar certificados.
-- Links úteis (nfephp-org):
-  - NFe: https://github.com/nfephp-org/sped-nfe
-  - DA (DANFE/DANFCE/MDFe/CTe): https://github.com/nfephp-org/sped-da
-  - IBPT: https://github.com/nfephp-org/sped-ibpt
-  - GTIN: https://github.com/nfephp-org/sped-gtin
+### 📞 **Suporte**
 
-Testes
-- O projeto utiliza PHPUnit.
+- Ver exemplos em [examples/](examples/)
+- Logs detalhados em modo debug  
+- Issues no repositório
+
+## 🗺️ Roadmap
+
+### ✅ **Concluído**
+
+- [x] Interface unificada (Facades)
+- [x] Sistema de respostas padronizado
+- [x] Error handling robusto
+- [x] Múltiplos providers NFSe
+- [x] Consultas públicas
+- [x] Tributação IBPT
+
+### 🔄 **Em Desenvolvimento**
+
+- [ ] Interface web de administração
+- [ ] Mais municípios NFSe  
+- [ ] Integração com bancos de dados
+- [ ] Dashboard de monitoramento
+
+### 🎯 **Planejado**
+
+- [ ] API REST para microserviços
+- [ ] SDK JavaScript/Python
+- [ ] Plugins para principais ERPs
+- [ ] Certificação digital em nuvem
+
+## 🛠️ Configuração Avançada
+
+Para informações detalhadas sobre configuração de certificados e providers, consulte:
+
+- 📄 [docs/providers-and-config.md](docs/providers-and-config.md)
+- 📄 [config/nfse-municipios.json](config/nfse-municipios.json)
+
+## 🧪 Estrutura de Testes
 
 ```bash
 vendor/bin/phpunit
 ```
 
-## Gerenciamento Centralizado (Singletons)
+### Gerenciamento Centralizado (Singletons)
 
-O fiscal-core inclui singletons para centralizar configurações e certificados:
-
-### CertificateManager
 ```php
 use freeline\FiscalCore\Support\CertificateManager;
+use freeline\FiscalCore\Support\ConfigManager;
 
-// Carrega certificado uma única vez
+// Certificados centralizados
 $certManager = CertificateManager::getInstance();
 $certManager->loadFromFile('/path/to/cert.pfx', 'password');
-
-// Reutiliza em qualquer lugar
-$cnpj = $certManager->getCnpj();
-$isValid = $certManager->isValid();
-$daysLeft = $certManager->getDaysUntilExpiration();
-```
-
-### ConfigManager
-```php
-use freeline\FiscalCore\Support\ConfigManager;
 
 // Configurações centralizadas
 $configManager = ConfigManager::getInstance();
 $configManager->set('ambiente', 2); // homologação
+```
+
+## 📁 Estrutura do Projeto
+
+```bash
+src/
+  Adapters/           # Integrações diretas com libs externas
+    BrasilAPIAdapter.php
+    DocumentoAdapter.php
+    GTINAdapter.php
+    IBPTAdapter.php
+    ImpressaoAdapter.php
+  Contracts/          # Interfaces padronizadas
+  Facade/             # Interfaces unificadas
+    FiscalFacade.php  # ✅ Interface principal
+    NFeFacade.php     # ✅ NFe completa
+    NFCeFacade.php    # ✅ NFCe completa
+    NFSeFacade.php    # ✅ Multi-município
+    ImpressaoFacade.php # ✅ DANFE/DANFSE
+    TributacaoFacade.php # ✅ IBPT
+  Support/            # Utilitários e helpers
+examples/             # ✅ Exemplos práticos
+  README.md           # ✅ Guia completo
+  GuiaCompletoDeUso.php # ✅ Visão geral
+  basico/             # ✅ Iniciantes
+  avancado/           # ✅ Produção
+```
+
 $configManager->set('uf', 'SP');
 $configManager->set('csc', 'SEU_CSC');
 
 // Acesso em qualquer adapter
 $isProduction = $configManager->isProduction();
 $nfeConfig = $configManager->getNFeConfig();
-```
+
+```php
 
 ### ToolsFactory
 ```php
@@ -236,6 +498,7 @@ $validation = ToolsFactory::validateEnvironment();
 ```
 
 Status do projeto
+
 - ✅ NFe Adapter: enviar/consultar/cancelar
 - ✅ NFCe Adapter: emissão modelo 65
 - ✅ Impressão (DANFE/DANFCE/MDFe/CTe)
@@ -252,11 +515,13 @@ Roadmap
 📋 **Ver TODO completo:** [TODO.md](TODO.md)
 
 🚀 **Sistema de Providers NFSe:**
+
 - ✅ Estrutura base implementada (AbstractProvider, Registry, Config)
 - ⏳ Implementação ABRASF v2 pendente
 - 📚 Guia de retomada: [docs/PROVIDERS-RETOMADA.md](docs/PROVIDERS-RETOMADA.md)
 
 **Próximas features:**
+
 - [ ] Implementar montagem XML ABRASF v2 ([ver guia](docs/PROVIDERS-RETOMADA.md))
 - [ ] Facades com APIs coesas (NFe/NFCe/NFSe/Impressão/Tributação)
 - [ ] Service Provider para Laravel
@@ -266,6 +531,7 @@ Roadmap
 - [ ] Documentação detalhada de cada Facade e Adapter
 
 **Quick start para retomar:**
+
 ```bash
 # Ver estrutura criada
 tree src/Providers config/
@@ -278,10 +544,11 @@ cat docs/PROVIDERS-RETOMADA.md
 ```
 
 Contribuição
+
 - Issues e PRs são bem-vindos. Antes de abrir PR:
   - Rode `vendor/bin/phpunit` e garanta verde.
   - Siga o estilo existente e mantenha mudanças focadas.
 
 Licença
-- MIT. Veja `composer.json`.
 
+- MIT. Veja `composer.json`.

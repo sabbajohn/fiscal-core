@@ -25,14 +25,20 @@ class ResponseHandler
     /**
      * Executa função e retorna FiscalResponse tratado
      * 
-     * @param callable $callback Função a ser executada
+     * @param callable|\Exception $callbackOrException Função a ser executada OU exceção a ser processada
      * @param string $operation Nome da operação (para logs/debug)
      * @return FiscalResponse Response padronizado
      */
-    public function handle(callable $callback, string $operation = 'unknown'): FiscalResponse
+    public function handle($callbackOrException, string $operation = 'unknown'): FiscalResponse
     {
+        // Se o primeiro parâmetro é uma exceção, processa diretamente
+        if ($callbackOrException instanceof \Exception || $callbackOrException instanceof \Throwable) {
+            return $this->handleException($callbackOrException, $operation);
+        }
+
+        // Caso contrário, trata como callable (comportamento original)
         try {
-            $result = $callback();
+            $result = $callbackOrException();
             
             // Se callback já retornou FiscalResponse, usa ele
             if ($result instanceof FiscalResponse) {
@@ -46,26 +52,34 @@ class ResponseHandler
                 ['execution_time' => $this->getExecutionTime()]
             );
             
-        } catch (FiscalException $e) {
+        } catch (\Exception|\Throwable $e) {
+            return $this->handleException($e, $operation);
+        }
+    }
+
+    /**
+     * Processa uma exceção e retorna FiscalResponse
+     */
+    private function handleException(\Exception|\Throwable $e, string $operation): FiscalResponse
+    {
+        if ($e instanceof FiscalException) {
             return $this->handleFiscalException($e, $operation);
-        } catch (CertificateException $e) {
+        } elseif ($e instanceof CertificateException) {
             return $this->handleCertificateException($e, $operation);
-        } catch (SefazException $e) {
+        } elseif ($e instanceof SefazException) {
             return $this->handleSefazException($e, $operation);
-        } catch (ValidationException $e) {
+        } elseif ($e instanceof ValidationException) {
             return $this->handleValidationException($e, $operation);
-        } catch (XmlException $e) {
+        } elseif ($e instanceof XmlException) {
             return $this->handleXmlException($e, $operation);
-        } catch (\InvalidArgumentException $e) {
+        } elseif ($e instanceof \InvalidArgumentException) {
             return $this->handleValidationError($e, $operation);
-        } catch (\RuntimeException $e) {
+        } elseif ($e instanceof \RuntimeException) {
             return $this->handleRuntimeError($e, $operation);
-        } catch (\LogicException $e) {
+        } elseif ($e instanceof \LogicException) {
             return $this->handleLogicError($e, $operation);
-        } catch (\Exception $e) {
+        } else {
             return $this->handleGenericError($e, $operation);
-        } catch (\Throwable $e) {
-            return $this->handleCriticalError($e, $operation);
         }
     }
 
@@ -431,5 +445,139 @@ class ResponseHandler
         return (new class($message, $e->getCode(), $e) extends FiscalException {})
             ->setErrorCode('UNKNOWN_ERROR')
             ->withContext(['original_exception' => get_class($e)]);
+    }
+
+    /**
+     * Executa callback simples
+     */
+    public function execute(callable $callback): FiscalResponse
+    {
+        return $this->handle($callback);
+    }
+
+    /**
+     * Executa callback com timeout
+     */
+    public function executeWithTimeout(callable $callback, int $timeoutSeconds): FiscalResponse
+    {
+        $startTime = microtime(true);
+        
+        // Usar pcntl_alarm se disponível
+        if (function_exists('pcntl_alarm')) {
+            pcntl_alarm($timeoutSeconds);
+        }
+        
+        try {
+            $result = $callback();
+            
+            if (function_exists('pcntl_alarm')) {
+                pcntl_alarm(0); // Cancela o alarm
+            }
+            
+            $executionTime = microtime(true) - $startTime;
+            
+            if ($executionTime > $timeoutSeconds) {
+                return FiscalResponse::error(
+                    "Operação excedeu tempo limite de {$timeoutSeconds}s",
+                    'TIMEOUT',
+                    'executeWithTimeout',
+                    ['execution_time' => $executionTime]
+                );
+            }
+            
+            return FiscalResponse::success($result, 'executeWithTimeout', ['execution_time' => $executionTime]);
+            
+        } catch (\Exception $e) {
+            if (function_exists('pcntl_alarm')) {
+                pcntl_alarm(0);
+            }
+            
+            if (strpos($e->getMessage(), 'timeout') !== false) {
+                return FiscalResponse::error(
+                    "Timeout de {$timeoutSeconds}s excedido",
+                    'TIMEOUT',
+                    'executeWithTimeout',
+                    ['execution_time' => microtime(true) - $startTime]
+                );
+            }
+            
+            return $this->handleException($e, 'executeWithTimeout');
+        }
+    }
+
+    /**
+     * Executa callback com retry automático
+     */
+    public function executeWithRetry(callable $callback, int $maxAttempts = 3, float $delaySec = 0.5): FiscalResponse
+    {
+        $attempts = 0;
+        $lastException = null;
+        
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+            
+            try {
+                $result = $callback();
+                return FiscalResponse::success($result, 'executeWithRetry', ['retry_attempts' => $attempts]);
+                
+            } catch (\Exception $e) {
+                $lastException = $e;
+                
+                // Se não há mais tentativas, falha
+                if ($attempts >= $maxAttempts) {
+                    break;
+                }
+                
+                // Delay antes da próxima tentativa
+                if ($delaySec > 0) {
+                    usleep($delaySec * 1000000);
+                }
+            }
+        }
+        
+        return FiscalResponse::error(
+            $lastException->getMessage(),
+            'RETRY_EXHAUSTED',
+            'executeWithRetry',
+            [
+                'retry_attempts' => $attempts,
+                'max_attempts' => $maxAttempts,
+                'last_error' => $lastException->getMessage()
+            ]
+        );
+    }
+
+    /**
+     * Executa callback com cache simples
+     */
+    public function executeWithCache(string $cacheKey, callable $callback, int $ttlSeconds = 300): FiscalResponse
+    {
+        static $cache = [];
+        static $cacheTimestamps = [];
+        
+        // Verifica se existe cache válido
+        if (isset($cache[$cacheKey]) && isset($cacheTimestamps[$cacheKey])) {
+            $age = time() - $cacheTimestamps[$cacheKey];
+            if ($age < $ttlSeconds) {
+                return FiscalResponse::success(
+                    $cache[$cacheKey],
+                    'executeWithCache',
+                    ['from_cache' => true, 'cache_age' => $age]
+                );
+            }
+        }
+        
+        try {
+            $result = $callback();
+            
+            // Armazena no cache
+            $cache[$cacheKey] = $result;
+            $cacheTimestamps[$cacheKey] = time();
+            
+            return FiscalResponse::success($result, 'executeWithCache', ['from_cache' => false]);
+            
+        } catch (\Exception $e) {
+            return $this->handleException($e, 'executeWithCache');
+        }
     }
 }

@@ -20,3 +20,4 @@ tinker.phar
 files/*
 
 .vscode/settings.json
+.phpunit.cache/test-results

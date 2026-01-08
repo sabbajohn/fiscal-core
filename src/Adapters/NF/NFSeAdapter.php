@@ -1,33 +1,69 @@
 <?php
 
-namespace freeline\FiscalCore\Adapters;
+namespace freeline\FiscalCore\Adapters\NF;
 
 use freeline\FiscalCore\Contracts\NotaServicoInterface;
 use freeline\FiscalCore\Contracts\NFSeProviderInterface;
-use freeline\FiscalCore\NFSe\ProviderResolver;
+use freeline\FiscalCore\Support\ProviderRegistry;
 
+/**
+ * Adapter moderno para NFSe usando o novo sistema de Providers
+ * Integrado com ProviderRegistry para carregamento automático de municípios
+ */
 class NFSeAdapter implements NotaServicoInterface
 {
-	private NFSeProviderInterface $provider;
+    private NFSeProviderInterface $provider;
+    private string $municipio;
 
-	public function __construct(ProviderResolver $resolver)
-	{
-		$this->provider = $resolver->resolve();
-	}
+    public function __construct(string $municipio)
+    {
+        $this->municipio = $municipio;
+        $registry = ProviderRegistry::getInstance();
+        $this->provider = $registry->get($municipio);
+    }
 
-	public function emitir(array $dados): string
-	{
-		return $this->provider->emitir($dados);
-	}
+    /**
+     * Emite uma NFSe
+     */
+    public function emitir(array $dados): string
+    {
+        return $this->provider->emitir($dados);
+    }
 
-	public function consultar(string $chave): string
-	{
-		return $this->provider->consultar($chave);
-	}
+    /**
+     * Consulta uma NFSe por chave/número
+     */
+    public function consultar(string $chave): string
+    {
+        return $this->provider->consultar($chave);
+    }
 
-	public function cancelar(string $chave, string $motivo, string $protocolo): bool
-	{
-		return $this->provider->cancelar($chave, $motivo, $protocolo);
-	}
+    /**
+     * Cancela uma NFSe
+     */
+    public function cancelar(string $chave, string $motivo, string $protocolo): bool
+    {
+        return $this->provider->cancelar($chave, $motivo, $protocolo);
+    }
+
+    /**
+     * Retorna o município configurado
+     */
+    public function getMunicipio(): string
+    {
+        return $this->municipio;
+    }
+
+    /**
+     * Retorna informações do provider atual
+     */
+    public function getProviderInfo(): array
+    {
+        return [
+            'municipio' => $this->municipio,
+            'provider_class' => get_class($this->provider),
+            'has_config' => method_exists($this->provider, 'getConfig'),
+        ];
+    }
 }
 

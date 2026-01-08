@@ -59,17 +59,22 @@ class FiscalResponse
      */
     public static function fromException(\Throwable $exception, string $operation = 'unknown'): self
     {
+        $metadata = [
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'trace_id' => uniqid(),
+            'exception_type' => get_class($exception),
+            'error_code' => $exception->getCode(),
+            'timestamp' => date('Y-m-d H:i:s')
+        ];
+
         return new self(
             false,
             [],
             $exception->getMessage(),
             get_class($exception),
             $operation,
-            [
-                'file' => $exception->getFile(),
-                'line' => $exception->getLine(),
-                'trace_id' => uniqid()
-            ]
+            $metadata
         );
     }
 
