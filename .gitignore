@@ -10,7 +10,10 @@ scripts/artisan-examples/*
 scripts/adapters/*
 scripts/
 
-
+# Tinkerwell
+*.phar
+tinker.phar
+.tinkerwell/
 
 .DS_Store
 

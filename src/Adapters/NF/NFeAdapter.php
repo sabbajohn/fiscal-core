@@ -1,6 +1,6 @@
 <?php
 
-namespace freeline\FiscalCore\Adapters;
+namespace freeline\FiscalCore\Adapters\NF;
 
 use freeline\FiscalCore\Contracts\NotaFiscalInterface;
 use freeline\FiscalCore\Adapters\NF\Builder\NotaFiscalBuilder;
@@ -42,7 +42,7 @@ class NFeAdapter implements NotaFiscalInterface
         
         // Monta o XML da NFe
         $xml = $make->getXML();
-        $xml = $make->monta();
+        $xml = $make->montaNFe();
         
         // Assina o XML
         $xmlAssinado = $this->tools->signNFe($xml);
@@ -77,5 +77,15 @@ class NFeAdapter implements NotaFiscalInterface
     public function cancelar(string $chave, string $motivo, string $protocolo): bool
     {
         return $this->tools->sefazCancela($chave, $motivo, $protocolo);
+    }
+
+    public function inutilizar(int $ano, int $cnpj, int $modelo, int $serie, int $numeroInicial, int $numeroFinal, string $justificativa): bool
+    {
+        return $this->tools->sefazInutiliza($ano, $cnpj, $modelo, $serie, $numeroInicial, $numeroFinal, $justificativa);
+    }
+
+    public function sefazStatus(string $uf = '', ?int $ambiente = null, bool $ignorarContigencia = true): string
+    {
+        return $this->tools->sefazStatus($uf, $ambiente, $ignorarContigencia);
     }
 }
