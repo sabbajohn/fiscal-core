@@ -56,8 +56,8 @@ class ToolsFactory
      */
     public static function createNFeTools(): NFeTools
     {
-        $certManager = CertificateManager::getInstance();
         $configManager = ConfigManager::getInstance();
+        $certManager = CertificateManager::getInstance();
 
         if (!$certManager->isLoaded()) {
             throw CertificateException::notLoaded();
