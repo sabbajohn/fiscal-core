@@ -100,5 +100,10 @@ class NFCeAdapter implements NotaFiscalInterface
 	{
 		return $this->tools->sefazStatus($uf, $ambiente, $ignorarContigencia);
 	}
+
+	public function consultaNotasEmitidasParaEstabelecimento(int $ultimoNsu=0, int $numNSU=0, ?string $chave=null, string $fonte='AN'): string
+    {
+        return $this->tools->sefazDistDFe($ultimoNsu, $numNSU, $chave, $fonte);
+    }
 }
 
