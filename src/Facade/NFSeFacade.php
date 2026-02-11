@@ -303,6 +303,34 @@ class NFSeFacade
         }
     }
 
+    public function consultarContribuinteCnc(string $cpfCnpj): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->consultarContribuinteCnc($cpfCnpj);
+            return FiscalResponse::success($resultado, 'nfse_cnc_contribuinte', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_cnc_contribuinte');
+        }
+    }
+
+    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->verificarHabilitacaoCnc($cpfCnpj, $codigoMunicipio);
+            return FiscalResponse::success($resultado, 'nfse_cnc_habilitacao', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_cnc_habilitacao');
+        }
+    }
+
     /**
      * Lista municípios disponíveis
      */

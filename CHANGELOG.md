@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.1.2 - 2026-02-11
+
+### Added
+- Consultas CNC para validação de habilitação do cliente NFSe Nacional:
+  - `consultarContribuinteCnc(cpfCnpj)`
+  - `verificarHabilitacaoCnc(cpfCnpj, codigoMunicipio?)`
+- Exposição das consultas CNC no `NFSeAdapter` e `NFSeFacade`.
+- Configuração de endpoints CNC em `config/nfse-municipios.json`:
+  - `cnc_endpoints.contribuinte`
+  - `cnc_endpoints.habilitacao`
+
+### Changed
+- `NacionalProvider` com normalização de resposta de habilitação (`habilitado`, `situacao`, `motivo`) e fallback resiliente.
+- Contrato `NFSeNacionalCapabilitiesInterface` evoluído com os novos métodos CNC.
+
+### Tests
+- Cobertura unitária adicionada/ajustada para chamadas CNC no provider, adapter e facade.
+
+### Notes
+- A execução local de testes permanece bloqueada neste ambiente por erro de runtime do PHP:
+  - `Library not loaded: /opt/homebrew/opt/net-snmp/lib/libnetsnmp.40.dylib`
+
 ## v1.1.1 - 2026-02-11
 
 ### Changed

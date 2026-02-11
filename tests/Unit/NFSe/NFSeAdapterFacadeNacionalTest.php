@@ -74,6 +74,25 @@ class NFSeAdapterFacadeNacionalTest extends TestCase
                     'metadata' => ['source' => 'remote', 'stale' => false],
                 ];
             }
+            public function consultarContribuinteCnc(string $cpfCnpj): array
+            {
+                return [
+                    'documento' => $cpfCnpj,
+                    'habilitado' => true,
+                    'situacao' => 'HABILITADO',
+                    'dados' => [],
+                ];
+            }
+            public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array
+            {
+                return [
+                    'documento' => $cpfCnpj,
+                    'codigo_municipio' => $codigoMunicipio,
+                    'habilitado' => true,
+                    'situacao' => 'HABILITADO',
+                    'dados' => [],
+                ];
+            }
         };
 
         $adapter = new NFSeAdapter('nfse_nacional', $provider);
@@ -90,5 +109,13 @@ class NFSeAdapterFacadeNacionalTest extends TestCase
         $aliquotas = $facade->consultarAliquotasMunicipio('4106902');
         $this->assertTrue($aliquotas->isSuccess());
         $this->assertSame(2.0, $aliquotas->getData()[0]['aliquota']);
+
+        $contribuinte = $facade->consultarContribuinteCnc('11222333000181');
+        $this->assertTrue($contribuinte->isSuccess());
+        $this->assertTrue($contribuinte->getData('habilitado'));
+
+        $habilitacao = $facade->verificarHabilitacaoCnc('11222333000181', '4106902');
+        $this->assertTrue($habilitacao->isSuccess());
+        $this->assertSame('4106902', $habilitacao->getData('codigo_municipio'));
     }
 }

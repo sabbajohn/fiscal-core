@@ -28,4 +28,18 @@ interface NFSeNacionalCapabilitiesInterface
      * @return array{data: array, metadata?: array}
      */
     public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array;
+
+    /**
+     * Consulta dados cadastrais do contribuinte no CNC.
+     *
+     * @return array<string,mixed>
+     */
+    public function consultarContribuinteCnc(string $cpfCnpj): array;
+
+    /**
+     * Verifica se o contribuinte está habilitado para emissão NFSe Nacional.
+     *
+     * @return array<string,mixed>
+     */
+    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array;
 }

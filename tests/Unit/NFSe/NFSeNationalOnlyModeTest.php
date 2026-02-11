@@ -52,6 +52,8 @@ class NFSeNationalOnlyModeTest extends TestCase
             public function baixarDanfse(string $chave): string { return '<ok />'; }
             public function listarMunicipiosNacionais(bool $forceRefresh = false): array { return ['data' => [], 'metadata' => []]; }
             public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array { return ['data' => [], 'metadata' => []]; }
+            public function consultarContribuinteCnc(string $cpfCnpj): array { return ['documento' => $cpfCnpj, 'habilitado' => true]; }
+            public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array { return ['documento' => $cpfCnpj, 'codigo_municipio' => $codigoMunicipio, 'habilitado' => true]; }
         };
 
         $adapter = new NFSeAdapter('curitiba', $provider);

@@ -78,6 +78,10 @@
       "baixar_xml": "POST",
       "baixar_danfse": "POST"
     },
+    "cnc_endpoints": {
+      "contribuinte": "cnc:/contribuintes/{cpfCnpj}",
+      "habilitacao": "cnc:/contribuintes/{cpfCnpj}/habilitacao"
+    },
     "catalog_endpoints": {
       "municipios": "cnc_municipio:/municipios",
       "aliquotas_municipio": "cnc_consulta:/municipios/{codigo_municipio}/aliquotas"

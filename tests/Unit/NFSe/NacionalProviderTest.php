@@ -116,6 +116,68 @@ class NacionalProviderTest extends TestCase
         $this->assertSame('https://adn.producaorestrita.nfse.gov.br/cnc/consulta/municipios/3550308/aliquotas', $calls[1]['path']);
     }
 
+    public function test_consulta_cnc_resolve_rota_por_servico(): void
+    {
+        $calls = [];
+        $config = $this->buildConfig(function ($method, $path, $body = null, $headers = []) use (&$calls) {
+            $calls[] = compact('method', 'path');
+            return json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+        });
+        $config['services'] = [
+            'adn_contribuintes' => [
+                'homologacao' => 'https://adn.producaorestrita.nfse.gov.br/contribuintes',
+                'producao' => 'https://adn.nfse.gov.br/contribuintes',
+            ],
+        ];
+        $config['cnc_endpoints'] = [
+            'contribuinte' => 'adn_contribuintes:/{cpfCnpj}',
+            'habilitacao' => 'adn_contribuintes:/{cpfCnpj}/habilitacao',
+        ];
+
+        $provider = new NacionalProvider($config);
+        $provider->consultarContribuinteCnc('11.222.333/0001-81');
+        $provider->verificarHabilitacaoCnc('11.222.333/0001-81', '3550308');
+
+        $this->assertSame('GET', $calls[0]['method']);
+        $this->assertSame('https://adn.producaorestrita.nfse.gov.br/contribuintes/11222333000181', $calls[0]['path']);
+        $this->assertSame('GET', $calls[1]['method']);
+        $this->assertSame('https://adn.producaorestrita.nfse.gov.br/contribuintes/11222333000181/habilitacao?codigoMunicipio=3550308', $calls[1]['path']);
+    }
+
+    public function test_consulta_cnc_contribuinte_e_habilitacao(): void
+    {
+        $calls = [];
+        $config = $this->buildConfig(function ($method, $path, $body = null, $headers = []) use (&$calls) {
+            $calls[] = compact('method', 'path');
+            if ($path === '/contribuintes/11222333000181') {
+                return json_encode([
+                    'documento' => '11222333000181',
+                    'situacao' => 'HABILITADO',
+                    'habilitado' => true,
+                ]);
+            }
+
+            if ($path === '/contribuintes/11222333000181/habilitacao?codigoMunicipio=4106902') {
+                return json_encode([
+                    'documento' => '11222333000181',
+                    'situacao' => 'HABILITADO',
+                    'habilitado' => true,
+                ]);
+            }
+
+            return json_encode(['habilitado' => false]);
+        });
+
+        $provider = new NacionalProvider($config);
+        $contribuinte = $provider->consultarContribuinteCnc('11.222.333/0001-81');
+        $habilitacao = $provider->verificarHabilitacaoCnc('11.222.333/0001-81', '4106902');
+
+        $this->assertTrue($contribuinte['habilitado']);
+        $this->assertTrue($habilitacao['habilitado']);
+        $this->assertSame('/contribuintes/11222333000181', $calls[0]['path']);
+        $this->assertSame('/contribuintes/11222333000181/habilitacao?codigoMunicipio=4106902', $calls[1]['path']);
+    }
+
     private function buildConfig(callable $httpClient): array
     {
         return [

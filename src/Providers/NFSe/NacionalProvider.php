@@ -12,6 +12,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 {
     private NacionalCatalogService $catalogService;
     private $httpClient;
+    private array $cncEndpoints = [];
 
     public function __construct(array $config)
     {
@@ -31,6 +32,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
                 $catalogEndpoints[$key] = $this->resolveConfiguredRoute($route);
             }
         }
+        $this->cncEndpoints = $this->buildCncEndpoints($config);
 
         $this->catalogService = new NacionalCatalogService(
             $catalogBaseUrl !== '' ? $catalogBaseUrl : $this->getNationalApiBaseUrl(),
@@ -140,6 +142,61 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
     public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
     {
         return $this->catalogService->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
+    }
+
+    public function consultarContribuinteCnc(string $cpfCnpj): array
+    {
+        $documento = $this->normalizeCpfCnpj($cpfCnpj);
+        $path = $this->resolveCncEndpoint('contribuinte', ['cpfCnpj' => $documento]);
+        $payload = $this->requestJson('GET', $path);
+
+        return [
+            'documento' => $documento,
+            'habilitado' => $this->extractHabilitado($payload),
+            'situacao' => $this->extractSituacao($payload),
+            'dados' => $payload,
+            'metadata' => [
+                'fonte' => 'cnc_contribuinte',
+                'path' => $path,
+            ],
+        ];
+    }
+
+    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array
+    {
+        $documento = $this->normalizeCpfCnpj($cpfCnpj);
+        $vars = [
+            'cpfCnpj' => $documento,
+            'codigo_municipio' => $codigoMunicipio ?? '',
+        ];
+        $path = $this->resolveCncEndpoint('habilitacao', $vars);
+
+        try {
+            $payload = $this->requestJson('GET', $path);
+            $source = 'cnc_habilitacao';
+        } catch (\Throwable $e) {
+            // Fallback para manter operação resiliente quando endpoint dedicado
+            // de habilitação não estiver disponível no ambiente.
+            $fallback = $this->consultarContribuinteCnc($documento);
+            $fallback['metadata']['fallback_error'] = $e->getMessage();
+            $fallback['metadata']['fonte'] = 'cnc_contribuinte_fallback';
+            $fallback['codigo_municipio'] = $codigoMunicipio;
+
+            return $fallback;
+        }
+
+        return [
+            'documento' => $documento,
+            'codigo_municipio' => $codigoMunicipio,
+            'habilitado' => $this->extractHabilitado($payload, $codigoMunicipio),
+            'situacao' => $this->extractSituacao($payload),
+            'motivo' => $this->extractMotivo($payload),
+            'dados' => $payload,
+            'metadata' => [
+                'fonte' => $source,
+                'path' => $path,
+            ],
+        ];
     }
 
     protected function montarXmlRps(array $dados): string
@@ -424,6 +481,25 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return (string) $response;
     }
 
+    private function requestJson(string $method, string $path, ?string $body = null): array
+    {
+        $headers = [
+            'Accept: application/json',
+        ];
+
+        if ($body !== null) {
+            $headers[] = 'Content-Type: application/json';
+        }
+
+        $raw = $this->requestHttp($method, $path, $body, $headers);
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            throw new \RuntimeException('Resposta JSON inválida do CNC');
+        }
+
+        return $decoded;
+    }
+
     private function buildAuthHeaders(): array
     {
         $auth = $this->getAuthConfig();
@@ -495,9 +571,165 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
     {
         foreach ($routeParams as $key => $value) {
             $route = str_replace('{' . $key . '}', rawurlencode((string) $value), $route);
+            $route = str_replace('{' . $this->toSnake($key) . '}', rawurlencode((string) $value), $route);
         }
 
         return $route;
+    }
+
+    private function buildCncEndpoints(array $config): array
+    {
+        $endpoints = [
+            'contribuinte' => 'cnc:/contribuintes/{cpfCnpj}',
+            'habilitacao' => 'cnc:/contribuintes/{cpfCnpj}/habilitacao',
+        ];
+
+        if (is_array($config['cnc_endpoints'] ?? null)) {
+            foreach ($config['cnc_endpoints'] as $key => $route) {
+                if (!is_string($route) || $route === '') {
+                    continue;
+                }
+                $endpoints[$key] = $route;
+            }
+        }
+
+        $resolved = [];
+        foreach ($endpoints as $key => $route) {
+            $resolved[$key] = $this->resolveConfiguredRoute($route);
+        }
+
+        return $resolved;
+    }
+
+    private function resolveCncEndpoint(string $key, array $params): string
+    {
+        $route = $this->cncEndpoints[$key] ?? '';
+        if ($route === '') {
+            throw new \RuntimeException("Endpoint CNC '{$key}' não configurado");
+        }
+
+        $route = $this->replaceRouteParams($route, $params);
+        if (str_contains($route, '{codigoMunicipio}') || str_contains($route, '{codigo_municipio}')) {
+            return $route;
+        }
+
+        if (!empty($params['codigo_municipio'])) {
+            $separator = str_contains($route, '?') ? '&' : '?';
+            $route .= $separator . 'codigoMunicipio=' . rawurlencode((string) $params['codigo_municipio']);
+        }
+
+        return $route;
+    }
+
+    private function toSnake(string $value): string
+    {
+        $value = preg_replace('/[A-Z]/', '_$0', $value) ?? $value;
+        return strtolower(ltrim($value, '_'));
+    }
+
+    private function normalizeCpfCnpj(string $cpfCnpj): string
+    {
+        $digits = $this->onlyDigits($cpfCnpj);
+        if (!in_array(strlen($digits), [11, 14], true)) {
+            throw new \InvalidArgumentException('Documento deve ser CPF (11) ou CNPJ (14)');
+        }
+
+        return $digits;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function extractHabilitado(array $payload, ?string $codigoMunicipio = null): bool
+    {
+        $candidate = $this->findFirstByKeys(
+            $payload,
+            ['habilitado', 'apto', 'ativo', 'podeEmitirNfse', 'pode_emitir_nfse', 'autorizado', 'status']
+        );
+
+        if (is_string($candidate)) {
+            $normalized = strtolower(trim($candidate));
+            if (in_array($normalized, ['habilitado', 'apto', 'ativo', 'autorizado', 'ok', 'regular', 'true', '1', 'sim'], true)) {
+                return true;
+            }
+            if (in_array($normalized, ['inabilitado', 'inapto', 'inativo', 'negado', 'false', '0', 'nao', 'não'], true)) {
+                return false;
+            }
+        }
+
+        if (is_bool($candidate)) {
+            return $candidate;
+        }
+
+        if (is_numeric($candidate)) {
+            return ((int) $candidate) === 1;
+        }
+
+        if ($codigoMunicipio !== null) {
+            $municipios = $this->findFirstByKeys($payload, ['municipios', 'convenios', 'convenio']);
+            if (is_array($municipios)) {
+                foreach ($municipios as $entry) {
+                    if (!is_array($entry)) {
+                        continue;
+                    }
+                    $cod = $this->findFirstByKeys($entry, ['codigoMunicipio', 'codigo_municipio', 'ibge']);
+                    if ((string) $cod === $codigoMunicipio) {
+                        $entryStatus = $this->findFirstByKeys($entry, ['habilitado', 'ativo', 'status', 'situacao']);
+                        return $this->extractHabilitado(['status' => $entryStatus]);
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function extractSituacao(array $payload): ?string
+    {
+        $value = $this->findFirstByKeys($payload, ['situacao', 'status', 'descricaoStatus', 'descricao_status']);
+        if ($value === null) {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    private function extractMotivo(array $payload): ?string
+    {
+        $value = $this->findFirstByKeys($payload, ['motivo', 'mensagem', 'descricao', 'xMotivo']);
+        if ($value === null) {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @param array<int,string> $keys
+     * @return mixed
+     */
+    private function findFirstByKeys(array $payload, array $keys)
+    {
+        foreach ($payload as $key => $value) {
+            if (is_string($key) && in_array($key, $keys, true)) {
+                return $value;
+            }
+            if (is_array($value)) {
+                $nested = $this->findFirstByKeys($value, $keys);
+                if ($nested !== null) {
+                    return $nested;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function buildConsultaXml(string $chave): string

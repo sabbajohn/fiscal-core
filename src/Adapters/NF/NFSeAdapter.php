@@ -95,6 +95,16 @@ class NFSeAdapter implements NotaServicoInterface
         return $this->requireNacionalCapabilities()->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
     }
 
+    public function consultarContribuinteCnc(string $cpfCnpj): array
+    {
+        return $this->requireNacionalCapabilities()->consultarContribuinteCnc($cpfCnpj);
+    }
+
+    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array
+    {
+        return $this->requireNacionalCapabilities()->verificarHabilitacaoCnc($cpfCnpj, $codigoMunicipio);
+    }
+
     /**
      * Retorna o município configurado
      */
