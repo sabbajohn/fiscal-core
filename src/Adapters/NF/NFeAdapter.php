@@ -6,7 +6,6 @@ use freeline\FiscalCore\Contracts\NotaFiscalInterface;
 use freeline\FiscalCore\Adapters\NF\Builder\NotaFiscalBuilder;
 use freeline\FiscalCore\Adapters\NF\Core\NotaFiscal;
 use NFePHP\NFe\Tools;
-use NFePHP\NFe\Make;
 
 /**
  * Adapter para NFe (modelo 55)
@@ -74,14 +73,16 @@ class NFeAdapter implements NotaFiscalInterface
         return $this->tools->sefazConsultaChave($chave);
     }
 
-    public function cancelar(string $chave, string $motivo, string $protocolo): bool
+    public function cancelar(string $chave, string $motivo, string $protocolo): string
     {
         return $this->tools->sefazCancela($chave, $motivo, $protocolo);
     }
 
-    public function inutilizar(int $ano, int $cnpj, int $modelo, int $serie, int $numeroInicial, int $numeroFinal, string $justificativa): bool
+    public function inutilizar(int $ano, int $cnpj, int $modelo, int $serie, int $numeroInicial, int $numeroFinal, string $justificativa): string
     {
-        return $this->tools->sefazInutiliza($ano, $cnpj, $modelo, $serie, $numeroInicial, $numeroFinal, $justificativa);
+        // sped-nfe v5 usa (serie, numeroInicial, numeroFinal, justificativa, tpAmb, ano[2])
+        $ano2Digitos = str_pad((string) ($ano % 100), 2, '0', STR_PAD_LEFT);
+        return $this->tools->sefazInutiliza($serie, $numeroInicial, $numeroFinal, $justificativa, null, $ano2Digitos);
     }
 
     public function consultaNotasEmitidasParaEstabelecimento(int $ultimoNsu=0, int $numNSU=0, ?string $chave=null, string $fonte='AN'): string

@@ -147,10 +147,12 @@ class NFCeFacade
                 throw new \InvalidArgumentException('Motivo deve ter pelo menos 15 caracteres');
             }
             
-            $success = $this->nfce->cancelar($chave, $motivo, $protocolo);
+            $xmlResponse = $this->nfce->cancelar($chave, $motivo, $protocolo);
             
             return [
-                'cancelado' => $success,
+                'cancelado' => $this->isSefazOperationSuccessful($xmlResponse),
+                'xml_response' => $xmlResponse,
+                'cstat' => $this->extrairCStat($xmlResponse),
                 'chave_acesso' => $chave,
                 'motivo' => $motivo,
                 'protocolo' => $protocolo
@@ -289,6 +291,28 @@ class NFCeFacade
             return 'Erro ao extrair status';
         }
     }
+
+    private function extrairCStat(string $xml): ?string
+    {
+        try {
+            $dom = new \DOMDocument();
+            $dom->loadXML($xml);
+            $xpath = new \DOMXPath($dom);
+            $cStat = $xpath->query('//cStat')->item(0);
+            return $cStat ? trim((string) $cStat->nodeValue) : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function isSefazOperationSuccessful(string $xml): bool
+    {
+        $cStat = $this->extrairCStat($xml);
+        if ($cStat === null) {
+            return false;
+        }
+        return in_array($cStat, ['100', '101', '102', '135', '136', '155'], true);
+    }
     
     private function simularChaveAcesso(array $dados): string
     {
@@ -319,4 +343,3 @@ class NFCeFacade
         return $dv >= 10 ? '0' : (string)$dv;
     }
 }
-

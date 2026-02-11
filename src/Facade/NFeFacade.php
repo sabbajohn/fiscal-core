@@ -149,10 +149,12 @@ class NFeFacade
                 throw new \InvalidArgumentException('Motivo deve ter pelo menos 15 caracteres');
             }
             
-            $success = $this->nfe->cancelar($chave, $motivo, $protocolo);
+            $xmlResponse = $this->nfe->cancelar($chave, $motivo, $protocolo);
             
             return [
-                'cancelado' => $success,
+                'cancelado' => $this->isSefazOperationSuccessful($xmlResponse),
+                'xml_response' => $xmlResponse,
+                'cstat' => $this->extrairCStat($xmlResponse),
                 'chave_acesso' => $chave,
                 'motivo' => $motivo,
                 'protocolo' => $protocolo
@@ -184,13 +186,15 @@ class NFeFacade
                 throw new \InvalidArgumentException('Justificativa deve ter pelo menos 15 caracteres');
             }
             
-            $success = $this->nfe->inutilizar(
+            $xmlResponse = $this->nfe->inutilizar(
                 $ano, $cnpj, 55, $serie, 
                 $numeroInicial, $numeroFinal, $justificativa
             );
             
             return [
-                'inutilizado' => $success,
+                'inutilizado' => $this->isSefazOperationSuccessful($xmlResponse),
+                'xml_response' => $xmlResponse,
+                'cstat' => $this->extrairCStat($xmlResponse),
                 'serie' => $serie,
                 'numeros' => [
                     'inicial' => $numeroInicial,
@@ -341,6 +345,28 @@ class NFeFacade
         } catch (\Exception $e) {
             return 'Erro ao extrair status';
         }
+    }
+
+    private function extrairCStat(string $xml): ?string
+    {
+        try {
+            $dom = new \DOMDocument();
+            $dom->loadXML($xml);
+            $xpath = new \DOMXPath($dom);
+            $cStat = $xpath->query('//cStat')->item(0);
+            return $cStat ? trim((string) $cStat->nodeValue) : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function isSefazOperationSuccessful(string $xml): bool
+    {
+        $cStat = $this->extrairCStat($xml);
+        if ($cStat === null) {
+            return false;
+        }
+        return in_array($cStat, ['100', '101', '102', '135', '136', '155'], true);
     }
     
     /**
