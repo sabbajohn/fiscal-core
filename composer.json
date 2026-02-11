@@ -2,10 +2,11 @@
   "name": "freeline/fiscal-core",
   "authors": [
     {
-      "name": "Sabbá John"
+      "name": "Sabbá John - https://github.com/sabbajohn"
+
     }
   ],
-  "description": "Pacote para emissão e consulta de notas fiscais usando nfephp",
+  "description": "Pacote para emissão e consulta de notas fiscais implementando interfaces simplificadas para o PHPNFe",
   "type": "library",
   "license": "MIT",
   "autoload": {
