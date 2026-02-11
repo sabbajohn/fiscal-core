@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.1.1 - 2026-02-11
+
+### Changed
+- Atualizada configuracao do provider `nfse_nacional` para as rotas oficiais ADN/CNC por ambiente (`homologacao` e `producao`).
+- Operacoes principais alinhadas ao padrao REST nacional:
+  - `POST /nfse` (emissao)
+  - `GET /nfse/{id}` (consulta)
+  - `POST /nfse/{id}/eventos` (cancelamento por evento)
+  - `POST /nfse` (substituicao via DPS)
+- Base do ADN versionada para `.../api/v1` em homologacao e producao.
+- `NacionalProvider` passou a suportar resolucao de endpoint por servico (`servico:/path`) e URL absoluta.
+- `AbstractNFSeProvider::getNationalApiBaseUrl()` agora prioriza base por ambiente em `services.adn`.
+- `NacionalCatalogService` passou a consumir endpoints configuraveis de catalogo com placeholders (`{codigo_municipio}`) e URL absoluta.
+- Ajustes de compatibilidade para manter suporte a configuracoes legadas com caminhos relativos.
+
+### Tests
+- Incluidos testes unitarios para validacao da resolucao de rotas por servico no provider e no catalogo.
+
+### Notes
+- A execucao local de testes permanece bloqueada neste ambiente por erro de runtime do PHP:
+  - `Library not loaded: /opt/homebrew/opt/net-snmp/lib/libnetsnmp.40.dylib`
+
 ## v1.1.0 - 2026-02-11
 
 ### Added

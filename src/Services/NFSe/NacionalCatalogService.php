@@ -6,24 +6,32 @@ use freeline\FiscalCore\Support\Cache\FileCacheStore;
 
 class NacionalCatalogService
 {
+    private const DEFAULT_ENDPOINTS = [
+        'municipios' => '/catalogos/municipios',
+        'aliquotas_municipio' => '/catalogos/municipios/{codigo_municipio}/aliquotas',
+    ];
+
     private string $apiBaseUrl;
     private int $timeout;
     private FileCacheStore $cache;
     private int $ttl;
     private $httpClient;
+    private array $endpoints;
 
     public function __construct(
         string $apiBaseUrl,
         int $timeout = 30,
         ?FileCacheStore $cache = null,
         int $ttl = 86400,
-        ?callable $httpClient = null
+        ?callable $httpClient = null,
+        array $endpoints = []
     ) {
         $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
         $this->timeout = $timeout;
         $this->cache = $cache ?? new FileCacheStore();
         $this->ttl = $ttl;
         $this->httpClient = $httpClient;
+        $this->endpoints = array_merge(self::DEFAULT_ENDPOINTS, $endpoints);
     }
 
     /**
@@ -34,7 +42,7 @@ class NacionalCatalogService
         $cacheKey = 'municipios';
         return $this->fetchWithCache(
             $cacheKey,
-            '/catalogos/municipios',
+            $this->resolveEndpoint('municipios'),
             $forceRefresh
         );
     }
@@ -51,7 +59,10 @@ class NacionalCatalogService
         $cacheKey = "aliquotas:{$codigoMunicipio}";
         return $this->fetchWithCache(
             $cacheKey,
-            "/catalogos/municipios/{$codigoMunicipio}/aliquotas",
+            $this->resolveEndpoint('aliquotas_municipio', [
+                'codigo_municipio' => $codigoMunicipio,
+                'ibge' => $codigoMunicipio,
+            ]),
             $forceRefresh
         );
     }
@@ -117,7 +128,7 @@ class NacionalCatalogService
             throw new \RuntimeException('Cliente HTTP mock retornou payload inválido');
         }
 
-        $url = $this->apiBaseUrl . $path;
+        $url = $this->buildUrl($path);
         $headers = ["Accept: application/json"];
 
         if (function_exists('curl_init')) {
@@ -159,5 +170,29 @@ class NacionalCatalogService
         }
 
         return $decoded;
+    }
+
+    private function resolveEndpoint(string $key, array $vars = []): string
+    {
+        $endpoint = (string) ($this->endpoints[$key] ?? '');
+        if ($endpoint === '') {
+            throw new \RuntimeException("Endpoint de catálogo '{$key}' não configurado");
+        }
+
+        foreach ($vars as $name => $value) {
+            $endpoint = str_replace('{' . $name . '}', (string) $value, $endpoint);
+        }
+
+        return $endpoint;
+    }
+
+    private function buildUrl(string $path): string
+    {
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        $normalized = str_starts_with($path, '/') ? $path : '/' . $path;
+        return $this->apiBaseUrl . $normalized;
     }
 }

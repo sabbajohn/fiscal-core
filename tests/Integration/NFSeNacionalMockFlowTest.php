@@ -19,18 +19,30 @@ class NFSeNacionalMockFlowTest extends TestCase
             'timeout' => 10,
             'cache_dir' => sys_get_temp_dir() . '/fiscal-core-integration-' . uniqid(),
             'http_client' => function (string $method, string $path, ?string $body = null, array $headers = []): string {
-                if ($method === 'POST' && $path === '/nfse/emitir') {
+                if ($method === 'POST' && $path === '/nfse') {
                     return '<Resposta><Sucesso>true</Sucesso><NumeroNfse>1001</NumeroNfse></Resposta>';
                 }
-                if ($method === 'POST' && $path === '/nfse/consultar') {
+                if ($method === 'GET' && $path === '/nfse/NFSE1001') {
                     return '<Consulta><Sucesso>true</Sucesso><NumeroNfse>1001</NumeroNfse></Consulta>';
                 }
-                if ($method === 'POST' && $path === '/nfse/cancelar') {
+                if ($method === 'POST' && $path === '/nfse/NFSE1001/eventos') {
                     return '<Cancelamento><Sucesso>true</Sucesso></Cancelamento>';
                 }
 
                 return '<Resposta><Sucesso>true</Sucesso></Resposta>';
             },
+            'endpoints' => [
+                'emitir' => '/nfse',
+                'consultar' => '/nfse/{id}',
+                'cancelar' => '/nfse/{id}/eventos',
+                'substituir' => '/nfse',
+            ],
+            'operation_methods' => [
+                'emitir' => 'POST',
+                'consultar' => 'GET',
+                'cancelar' => 'POST',
+                'substituir' => 'POST',
+            ],
         ]);
 
         $adapter = new NFSeAdapter('nfse_nacional', $provider);

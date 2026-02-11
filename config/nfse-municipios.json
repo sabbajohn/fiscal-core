@@ -7,12 +7,12 @@
     "provider_class": "NacionalProvider",
     "xml_namespace": "http://www.publica.inf.br/integracao_nfse",
     "codigo_municipio": "0000000",
-    "api_base_url": "https://api.nfse.gov.br/adn/v1",
-    "wsdl": "https://api.nfse.gov.br/adn/v1/servicos?wsdl",
-    "wsdl_homologacao": "https://homologacao.api.nfse.gov.br/adn/v1/servicos?wsdl",
-    "wsdl_producao": "https://producao.api.nfse.gov.br/adn/v1/servicos?wsdl",
-    "url_homologacao": "https://homologacao.api.nfse.gov.br/adn/v1",
-    "url_producao": "https://producao.api.nfse.gov.br/adn/v1",
+    "api_base_url": "https://adn.producaorestrita.nfse.gov.br/api/v1",
+    "wsdl": "https://adn.producaorestrita.nfse.gov.br/docs/index.html",
+    "wsdl_homologacao": "https://adn.producaorestrita.nfse.gov.br/docs/index.html",
+    "wsdl_producao": "https://adn.nfse.gov.br/docs/index.html",
+    "url_homologacao": "https://adn.producaorestrita.nfse.gov.br/api/v1",
+    "url_producao": "https://adn.nfse.gov.br/api/v1",
     "timeout": 30,
     "cache_ttl": 86400,
     "signature_mode": "required",
@@ -20,15 +20,67 @@
       "token": "",
       "api_key": ""
     },
+    "services": {
+      "adn": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/api/v1",
+        "producao": "https://adn.nfse.gov.br/api/v1"
+      },
+      "cnc": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/cnc",
+        "producao": "https://adn.nfse.gov.br/cnc"
+      },
+      "cnc_municipio": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/cnc/municipio",
+        "producao": "https://adn.nfse.gov.br/cnc/municipio"
+      },
+      "cnc_consulta": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/cnc/consulta",
+        "producao": "https://adn.nfse.gov.br/cnc/consulta"
+      },
+      "adn_municipios": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/municipios",
+        "producao": "https://adn.nfse.gov.br/municipios"
+      },
+      "adn_contribuintes": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/contribuintes",
+        "producao": "https://adn.nfse.gov.br/contribuintes"
+      },
+      "parametrizacao": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/parametrizacao",
+        "producao": "https://adn.nfse.gov.br/parametrizacao"
+      },
+      "danfse": {
+        "homologacao": "https://adn.producaorestrita.nfse.gov.br/danfse",
+        "producao": "https://adn.nfse.gov.br/danfse"
+      },
+      "sefin": {
+        "homologacao": "https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional",
+        "producao": "https://sefin.nfse.gov.br/SefinNacional"
+      }
+    },
     "endpoints": {
-      "emitir": "/nfse/emitir",
-      "consultar": "/nfse/consultar",
-      "cancelar": "/nfse/cancelar",
-      "substituir": "/nfse/substituir",
-      "consultar_rps": "/nfse/consultar-rps",
-      "consultar_lote": "/nfse/consultar-lote",
-      "baixar_xml": "/nfse/download/xml",
-      "baixar_danfse": "/nfse/download/danfse"
+      "emitir": "adn:/nfse",
+      "consultar": "adn:/nfse/{id}",
+      "cancelar": "adn:/nfse/{id}/eventos",
+      "substituir": "adn:/nfse",
+      "consultar_rps": "adn:/nfse/consultar-rps",
+      "consultar_lote": "adn:/nfse/consultar-lote",
+      "baixar_xml": "adn:/nfse/download/xml",
+      "baixar_danfse": "danfse:/nfse/download/danfse"
+    },
+    "operation_methods": {
+      "emitir": "POST",
+      "consultar": "GET",
+      "cancelar": "POST",
+      "substituir": "POST",
+      "consultar_rps": "POST",
+      "consultar_lote": "POST",
+      "baixar_xml": "POST",
+      "baixar_danfse": "POST"
+    },
+    "catalog_endpoints": {
+      "municipios": "cnc_municipio:/municipios",
+      "aliquotas_municipio": "cnc_consulta:/municipios/{codigo_municipio}/aliquotas"
     },
     "aliquota_format": "decimal",
     "versao": "1.00",

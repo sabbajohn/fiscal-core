@@ -21,9 +21,19 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 
         $cacheDir = $config['cache_dir'] ?? null;
         $cacheTtl = (int) ($config['cache_ttl'] ?? 86400);
+        $catalogBaseUrl = $this->resolveServiceBase((string) ($config['catalog_service'] ?? 'cnc_consulta'));
+        $catalogEndpoints = [];
+        if (is_array($config['catalog_endpoints'] ?? null)) {
+            foreach ($config['catalog_endpoints'] as $key => $route) {
+                if (!is_string($route) || $route === '') {
+                    continue;
+                }
+                $catalogEndpoints[$key] = $this->resolveConfiguredRoute($route);
+            }
+        }
 
         $this->catalogService = new NacionalCatalogService(
-            $this->getNationalApiBaseUrl(),
+            $catalogBaseUrl !== '' ? $catalogBaseUrl : $this->getNationalApiBaseUrl(),
             $this->getTimeout(),
             new FileCacheStore($cacheDir),
             $cacheTtl,
@@ -31,7 +41,8 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
                 ? function (string $path) {
                     return call_user_func($this->httpClient, 'GET', $path, null, []);
                 }
-                : null
+                : null,
+            $catalogEndpoints
         );
     }
 
@@ -51,7 +62,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         $xml = $this->buildConsultaXml($chave);
-        return $this->enviarOperacao('consultar', $xml);
+        return $this->enviarOperacao('consultar', $xml, ['id' => $chave]);
     }
 
     public function cancelar(string $chave, string $motivo, ?string $protocolo = null): bool
@@ -61,7 +72,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         $xml = $this->buildCancelamentoXml($chave, $motivo, $protocolo);
-        $response = $this->enviarOperacao('cancelar', $xml);
+        $response = $this->enviarOperacao('cancelar', $xml, ['id' => $chave]);
         $parsed = $this->processarResposta($response);
 
         return (bool) ($parsed['sucesso'] ?? false);
@@ -304,10 +315,12 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return true;
     }
 
-    private function enviarOperacao(string $operacao, string $xml): string
+    private function enviarOperacao(string $operacao, ?string $xml = null, array $routeParams = []): string
     {
-        $path = $this->resolveOperationPath($operacao);
-        $response = $this->requestHttp('POST', $path, $xml, [
+        [$method, $path] = $this->resolveOperationRequest($operacao, $routeParams);
+        $payload = in_array($method, ['GET', 'DELETE'], true) ? null : $xml;
+
+        $response = $this->requestHttp($method, $path, $payload, [
             'Content-Type: application/xml',
             'Accept: application/xml',
         ]);
@@ -319,26 +332,38 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $response;
     }
 
-    private function resolveOperationPath(string $operacao): string
+    private function resolveOperationRequest(string $operacao, array $routeParams = []): array
     {
         $defaultMap = [
-            'emitir' => '/nfse/emitir',
-            'consultar' => '/nfse/consultar',
-            'cancelar' => '/nfse/cancelar',
-            'substituir' => '/nfse/substituir',
-            'consultar_rps' => '/nfse/consultar-rps',
-            'consultar_lote' => '/nfse/consultar-lote',
-            'baixar_xml' => '/nfse/download/xml',
-            'baixar_danfse' => '/nfse/download/danfse',
+            'emitir' => 'adn:/nfse',
+            'consultar' => 'adn:/nfse/{id}',
+            'cancelar' => 'adn:/nfse/{id}/eventos',
+            'substituir' => 'adn:/nfse',
+            'consultar_rps' => 'adn:/nfse/consultar-rps',
+            'consultar_lote' => 'adn:/nfse/consultar-lote',
+            'baixar_xml' => 'adn:/nfse/download/xml',
+            'baixar_danfse' => 'danfse:/nfse/download/danfse',
+        ];
+        $defaultMethods = [
+            'emitir' => 'POST',
+            'consultar' => 'GET',
+            'cancelar' => 'POST',
+            'substituir' => 'POST',
+            'consultar_rps' => 'POST',
+            'consultar_lote' => 'POST',
+            'baixar_xml' => 'POST',
+            'baixar_danfse' => 'POST',
         ];
 
         $configured = $this->config['endpoints'][$operacao] ?? null;
-        $path = (string) ($configured ?? $defaultMap[$operacao] ?? '');
-        if ($path === '') {
+        $route = (string) ($configured ?? $defaultMap[$operacao] ?? '');
+        if ($route === '') {
             throw new \RuntimeException("Endpoint da operação {$operacao} não configurado");
         }
 
-        return str_starts_with($path, '/') ? $path : '/' . $path;
+        $route = $this->replaceRouteParams($route, $routeParams);
+        $method = strtoupper((string) ($this->config['operation_methods'][$operacao] ?? $defaultMethods[$operacao] ?? 'POST'));
+        return [$method, $this->resolveConfiguredRoute($route)];
     }
 
     private function requestHttp(string $method, string $path, ?string $body = null, array $headers = []): string
@@ -352,7 +377,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             return $result;
         }
 
-        $url = rtrim($this->getNationalApiBaseUrl(), '/') . $path;
+        $url = $this->buildRequestUrl($path);
         $authHeaders = $this->buildAuthHeaders();
         $allHeaders = array_merge($headers, $authHeaders);
 
@@ -413,6 +438,66 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         return $headers;
+    }
+
+    private function resolveConfiguredRoute(string $route): string
+    {
+        if (preg_match('#^https?://#i', $route)) {
+            return $route;
+        }
+
+        if (preg_match('#^([a-z0-9_]+):(\/.*)$#i', $route, $matches)) {
+            $serviceBase = $this->resolveServiceBase($matches[1]);
+            if ($serviceBase !== '') {
+                return rtrim($serviceBase, '/') . $matches[2];
+            }
+
+            return $matches[2];
+        }
+
+        return str_starts_with($route, '/') ? $route : '/' . $route;
+    }
+
+    private function resolveServiceBase(string $service): string
+    {
+        $services = $this->config['services'] ?? [];
+        if (!is_array($services) || !isset($services[$service])) {
+            return '';
+        }
+
+        $serviceConfig = $services[$service];
+        if (is_string($serviceConfig) && $serviceConfig !== '') {
+            return rtrim($serviceConfig, '/');
+        }
+
+        if (is_array($serviceConfig)) {
+            $ambiente = $this->getAmbiente();
+            $byAmbiente = $serviceConfig[$ambiente] ?? null;
+            if (is_string($byAmbiente) && $byAmbiente !== '') {
+                return rtrim($byAmbiente, '/');
+            }
+        }
+
+        return '';
+    }
+
+    private function buildRequestUrl(string $path): string
+    {
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        $normalizedPath = str_starts_with($path, '/') ? $path : '/' . $path;
+        return rtrim($this->getNationalApiBaseUrl(), '/') . $normalizedPath;
+    }
+
+    private function replaceRouteParams(string $route, array $routeParams): string
+    {
+        foreach ($routeParams as $key => $value) {
+            $route = str_replace('{' . $key . '}', rawurlencode((string) $value), $route);
+        }
+
+        return $route;
     }
 
     private function buildConsultaXml(string $chave): string

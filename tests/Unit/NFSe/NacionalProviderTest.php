@@ -19,19 +19,25 @@ class NacionalProviderTest extends TestCase
 
         $this->assertStringContainsString('<Sucesso>true</Sucesso>', $response);
         $this->assertSame('POST', $calls[0]['method']);
-        $this->assertSame('/nfse/emitir', $calls[0]['path']);
+        $this->assertSame('/nfse', $calls[0]['path']);
         $this->assertStringContainsString('<GerarNfseEnvio', $calls[0]['body']);
         $this->assertStringContainsString('InfDeclaracaoPrestacaoServico', $calls[0]['body']);
     }
 
     public function test_cancelar_retorna_true_quando_resposta_indica_sucesso(): void
     {
+        $calls = [];
         $provider = new NacionalProvider($this->buildConfig(
-            fn ($method = null, $path = null, $body = null, $headers = []) => '<CancelarResposta><Sucesso>true</Sucesso></CancelarResposta>'
+            function ($method = null, $path = null, $body = null, $headers = []) use (&$calls) {
+                $calls[] = compact('method', 'path', 'body');
+                return '<CancelarResposta><Sucesso>true</Sucesso></CancelarResposta>';
+            }
         ));
 
         $result = $provider->cancelar('NFSE123', 'Erro operacional');
         $this->assertTrue($result);
+        $this->assertSame('POST', $calls[0]['method']);
+        $this->assertSame('/nfse/NFSE123/eventos', $calls[0]['path']);
     }
 
     public function test_consultar_retorno_compnfse_com_xml_real(): void
@@ -55,6 +61,61 @@ class NacionalProviderTest extends TestCase
         $provider->consultarPorRps(['numero' => 1]);
     }
 
+    public function test_emitir_resolve_rota_por_servico_configurado(): void
+    {
+        $calls = [];
+        $config = $this->buildConfig(function ($method, $path, $body, $headers = []) use (&$calls) {
+            $calls[] = compact('method', 'path');
+            return '<Resposta><Sucesso>true</Sucesso></Resposta>';
+        });
+        $config['services'] = [
+            'adn' => [
+                'homologacao' => 'https://adn.producaorestrita.nfse.gov.br/api/v1',
+                'producao' => 'https://adn.nfse.gov.br/api/v1',
+            ],
+        ];
+        $config['endpoints']['emitir'] = 'adn:/nfse';
+
+        $provider = new NacionalProvider($config);
+        $provider->emitir($this->dadosValidos());
+
+        $this->assertSame('https://adn.producaorestrita.nfse.gov.br/api/v1/nfse', $calls[0]['path']);
+    }
+
+    public function test_catalogo_resolve_rota_por_servico_configurado(): void
+    {
+        $calls = [];
+        $config = $this->buildConfig(function ($method, $path, $body = null, $headers = []) use (&$calls) {
+            $calls[] = compact('method', 'path');
+            if ($method === 'GET') {
+                return ['data' => [['codigo_municipio' => '3550308']]];
+            }
+
+            return '<Resposta><Sucesso>true</Sucesso></Resposta>';
+        });
+        $config['services'] = [
+            'cnc_municipio' => [
+                'homologacao' => 'https://adn.producaorestrita.nfse.gov.br/cnc/municipio',
+                'producao' => 'https://adn.nfse.gov.br/cnc/municipio',
+            ],
+            'cnc_consulta' => [
+                'homologacao' => 'https://adn.producaorestrita.nfse.gov.br/cnc/consulta',
+                'producao' => 'https://adn.nfse.gov.br/cnc/consulta',
+            ],
+        ];
+        $config['catalog_endpoints'] = [
+            'municipios' => 'cnc_municipio:/municipios',
+            'aliquotas_municipio' => 'cnc_consulta:/municipios/{codigo_municipio}/aliquotas',
+        ];
+
+        $provider = new NacionalProvider($config);
+        $provider->listarMunicipiosNacionais(true);
+        $provider->consultarAliquotasMunicipio('3550308', true);
+
+        $this->assertSame('https://adn.producaorestrita.nfse.gov.br/cnc/municipio/municipios', $calls[0]['path']);
+        $this->assertSame('https://adn.producaorestrita.nfse.gov.br/cnc/consulta/municipios/3550308/aliquotas', $calls[1]['path']);
+    }
+
     private function buildConfig(callable $httpClient): array
     {
         return [
@@ -65,14 +126,20 @@ class NacionalProviderTest extends TestCase
             'timeout' => 10,
             'auth' => ['token' => 'abc'],
             'endpoints' => [
-                'emitir' => '/nfse/emitir',
-                'consultar' => '/nfse/consultar',
-                'cancelar' => '/nfse/cancelar',
-                'substituir' => '/nfse/substituir',
+                'emitir' => '/nfse',
+                'consultar' => '/nfse/{id}',
+                'cancelar' => '/nfse/{id}/eventos',
+                'substituir' => '/nfse',
                 'consultar_rps' => '/nfse/consultar-rps',
                 'consultar_lote' => '/nfse/consultar-lote',
                 'baixar_xml' => '/nfse/download/xml',
                 'baixar_danfse' => '/nfse/download/danfse',
+            ],
+            'operation_methods' => [
+                'emitir' => 'POST',
+                'consultar' => 'GET',
+                'cancelar' => 'POST',
+                'substituir' => 'POST',
             ],
             'http_client' => $httpClient,
             'cache_dir' => sys_get_temp_dir() . '/fiscal-core-provider-' . uniqid(),

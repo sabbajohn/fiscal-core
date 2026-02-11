@@ -155,6 +155,21 @@ abstract class AbstractNFSeProvider implements NFSeProviderConfigInterface
      */
     public function getNationalApiBaseUrl(): string
     {
+        $serviceAdn = $this->config['services']['adn'] ?? null;
+        if (is_array($serviceAdn)) {
+            $ambienteUrl = $serviceAdn[$this->ambiente] ?? null;
+            if (is_string($ambienteUrl) && $ambienteUrl !== '') {
+                return rtrim($ambienteUrl, '/');
+            }
+        }
+
+        $urlByEnv = $this->ambiente === 'producao'
+            ? ($this->config['url_producao'] ?? null)
+            : ($this->config['url_homologacao'] ?? null);
+        if (is_string($urlByEnv) && $urlByEnv !== '') {
+            return rtrim($urlByEnv, '/');
+        }
+
         return rtrim((string) ($this->config['api_base_url'] ?? $this->config['wsdl'] ?? ''), '/');
     }
     

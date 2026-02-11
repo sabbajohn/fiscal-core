@@ -1,6 +1,6 @@
 # NFSe Nacional - Homologacao e Liberacao
 
-Este guia cobre a validacao da versao `v1.1.0` em ambiente completo e os comandos de liberacao.
+Este guia cobre a validacao da versao `v1.1.1` em ambiente completo e os comandos de liberacao.
 
 ## 1) Pre-requisitos do ambiente
 
@@ -71,10 +71,10 @@ Depois que homologacao passar:
 
 ```bash
 git add CHANGELOG.md config/nfse-municipios.json src tests docs
-git commit -m "release(nfse): v1.1.0 nacional-only + homologacao"
-git tag v1.1.0
+git commit -m "release(nfse): v1.1.1 rotas oficiais adn/cnc"
+git tag v1.1.1
 git push origin main
-git push origin v1.1.0
+git push origin v1.1.1
 ```
 
 ## 6) Pos-release
