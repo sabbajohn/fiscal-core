@@ -79,6 +79,15 @@ abstract class AbstractNFSeProvider implements NFSeProviderConfigInterface
         // Usar $chave, $motivo e $protocolo (se fornecido)
         return false;
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function substituir(string $chave, array $dados): string
+    {
+        // TODO: Implementar substituição quando o provider suportar
+        return '<?xml version="1.0"?><substituirNfseResposta><mensagem>Implementação pendente</mensagem></substituirNfseResposta>';
+    }
     
     /**
      * {@inheritDoc}
@@ -115,6 +124,38 @@ abstract class AbstractNFSeProvider implements NFSeProviderConfigInterface
     public function getCodigoMunicipio(): string
     {
         return $this->config['codigo_municipio'] ?? '';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getAmbiente(): string
+    {
+        return $this->ambiente;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getTimeout(): int
+    {
+        return (int) ($this->config['timeout'] ?? 30);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getAuthConfig(): array
+    {
+        return $this->config['auth'] ?? [];
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getNationalApiBaseUrl(): string
+    {
+        return rtrim((string) ($this->config['api_base_url'] ?? $this->config['wsdl'] ?? ''), '/');
     }
     
     /**

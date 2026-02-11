@@ -1,64 +1,58 @@
 {
-  "_comment": "Configuração de providers NFSe por município",
-  "_instructions": "Para adicionar novo município, copie um bloco existente e ajuste os valores",
-  
+  "_comment": "Configuração de providers NFSe nacional",
+  "_instructions": "NFSe é resolvida pelo provider nacional. Chaves municipais abaixo são aliases legados.",
+  "nfse_nacional": {
+    "_comment": "Provedor Nacional - Modelo NFSe Nacional",
+    "provider": "NacionalProvider",
+    "provider_class": "NacionalProvider",
+    "xml_namespace": "http://www.publica.inf.br/integracao_nfse",
+    "codigo_municipio": "0000000",
+    "api_base_url": "https://api.nfse.gov.br/adn/v1",
+    "wsdl": "https://api.nfse.gov.br/adn/v1/servicos?wsdl",
+    "wsdl_homologacao": "https://homologacao.api.nfse.gov.br/adn/v1/servicos?wsdl",
+    "wsdl_producao": "https://producao.api.nfse.gov.br/adn/v1/servicos?wsdl",
+    "url_homologacao": "https://homologacao.api.nfse.gov.br/adn/v1",
+    "url_producao": "https://producao.api.nfse.gov.br/adn/v1",
+    "timeout": 30,
+    "cache_ttl": 86400,
+    "signature_mode": "required",
+    "auth": {
+      "token": "",
+      "api_key": ""
+    },
+    "endpoints": {
+      "emitir": "/nfse/emitir",
+      "consultar": "/nfse/consultar",
+      "cancelar": "/nfse/cancelar",
+      "substituir": "/nfse/substituir",
+      "consultar_rps": "/nfse/consultar-rps",
+      "consultar_lote": "/nfse/consultar-lote",
+      "baixar_xml": "/nfse/download/xml",
+      "baixar_danfse": "/nfse/download/danfse"
+    },
+    "aliquota_format": "decimal",
+    "versao": "1.00",
+    "backend": "http",
+    "ambiente": "homologacao"
+  },
   "curitiba": {
-    "provider": "AbrasfV2Provider",
-    "codigo_municipio": "4106902",
-    "wsdl": "https://nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
-    "wsdl_homologacao": "https://homologacao.nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
-    "wsdl_producao": "https://nfse.curitiba.pr.gov.br/servicos/servicos.asmx?wsdl",
-    "aliquota_format": "decimal",
-    "versao": "2.02",
-    "ambiente": "homologacao"
+    "_comment": "Alias legado - roteia para NFSe nacional",
+    "alias_of": "nfse_nacional",
+    "legacy": true
   },
-  
   "campo_largo": {
-    "provider": "AbrasfV2Provider",
-    "codigo_municipio": "4104600",
-    "wsdl": "https://nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_homologacao": "https://homologacao.nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_producao": "https://nfse.campolargo.pr.gov.br/ws/nfse.asmx?wsdl",
-    "aliquota_format": "decimal",
-    "versao": "2.02",
-    "ambiente": "homologacao"
+    "_comment": "Alias legado - roteia para NFSe nacional",
+    "alias_of": "nfse_nacional",
+    "legacy": true
   },
-  
   "joinville": {
-    "provider": "JoinvilleProvider",
-    "codigo_municipio": "4209102",
-    "wsdl": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_homologacao": "https://homologacao.nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_producao": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
-    "aliquota_format": "percentual",
-    "versao": "2.01",
-    "ambiente": "homologacao",
-    "particularidades": {
-      "campo_extra_x": true,
-      "validacao_especial": true
-    }
+    "_comment": "Alias legado - roteia para NFSe nacional",
+    "alias_of": "nfse_nacional",
+    "legacy": true
   },
-  
   "sao_jose_dos_pinhais": {
-    "provider": "AbrasfV2Provider",
-    "codigo_municipio": "4125506",
-    "wsdl": "https://nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_homologacao": "https://homologacao.nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
-    "wsdl_producao": "https://nfse.sjp.pr.gov.br/ws/nfse.asmx?wsdl",
-    "aliquota_format": "decimal",
-    "versao": "2.02",
-    "ambiente": "homologacao"
-  },
-  
-  "_template": {
-    "_comment": "Template para adicionar novo município",
-    "provider": "AbrasfV2Provider",
-    "codigo_municipio": "1234567",
-    "wsdl": "https://url-do-webservice",
-    "wsdl_homologacao": "https://url-homologacao",
-    "wsdl_producao": "https://url-producao",
-    "aliquota_format": "decimal",
-    "versao": "2.02",
-    "ambiente": "homologacao"
+    "_comment": "Alias legado - roteia para NFSe nacional",
+    "alias_of": "nfse_nacional",
+    "legacy": true
   }
 }

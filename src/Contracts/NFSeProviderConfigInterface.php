@@ -37,6 +37,34 @@ interface NFSeProviderConfigInterface extends NFSeProviderInterface
      * @return string Código IBGE (7 dígitos)
      */
     public function getCodigoMunicipio(): string;
+
+    /**
+     * Retorna o ambiente operacional
+     *
+     * @return string 'producao' ou 'homologacao'
+     */
+    public function getAmbiente(): string;
+
+    /**
+     * Retorna timeout padrão para chamadas ao webservice
+     *
+     * @return int Timeout em segundos
+     */
+    public function getTimeout(): int;
+
+    /**
+     * Retorna configuração de autenticação do provider
+     *
+     * @return array
+     */
+    public function getAuthConfig(): array;
+
+    /**
+     * Retorna URL base da API Nacional (quando aplicável)
+     *
+     * @return string
+     */
+    public function getNationalApiBaseUrl(): string;
     
     /**
      * Valida se os dados estão no formato correto para este provider

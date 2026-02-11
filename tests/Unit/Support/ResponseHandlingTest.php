@@ -198,4 +198,51 @@ class ResponseHandlingTest extends TestCase
         $this->assertEquals(1, $response2->getData()['execucao']); // Mesmo valor (cache)
         $this->assertTrue($response2->getMetadata()['from_cache']);
     }
+
+    /** @test */
+    public function deve_normalizar_retorno_sefaz_xml_invalido_com_fallback(): void
+    {
+        $handler = new ResponseHandler();
+        $parsed = $handler->parseSefazRetorno('<xml-invalido');
+
+        $this->assertSame([
+            'lote' => null,
+            'protocolo' => null,
+            'autorizado' => false,
+            'status' => 'desconhecido',
+        ], $parsed);
+    }
+
+    /** @test */
+    public function deve_normalizar_retorno_sefaz_com_namespace(): void
+    {
+        $handler = new ResponseHandler();
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
+  <retEnviNFe>
+    <cUF>41</cUF>
+    <cStat>103</cStat>
+    <xMotivo>Lote recebido com sucesso</xMotivo>
+    <dhRecbto>2026-02-11T10:00:00-03:00</dhRecbto>
+  </retEnviNFe>
+  <protNFe>
+    <infProt>
+      <chNFe>41260200000000000000550010000000011000000010</chNFe>
+      <nProt>141260000000001</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NF-e</xMotivo>
+      <dhRecbto>2026-02-11T10:00:05-03:00</dhRecbto>
+    </infProt>
+  </protNFe>
+</nfeProc>
+XML;
+
+        $parsed = $handler->parseSefazRetorno($xml);
+
+        $this->assertSame('103', $parsed['lote']['cStat']);
+        $this->assertSame('100', $parsed['protocolo']['cStat']);
+        $this->assertTrue($parsed['autorizado']);
+        $this->assertSame('autorizada', $parsed['status']);
+    }
 }

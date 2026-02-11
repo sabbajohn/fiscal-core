@@ -19,6 +19,8 @@ use freeline\FiscalCore\Contracts\NFSeProviderConfigInterface;
  */
 class ProviderRegistry
 {
+    private const NFSE_NATIONAL_KEY = 'nfse_nacional';
+
     private static ?self $instance = null;
     private array $config = [];
     private array $providers = [];
@@ -58,30 +60,33 @@ class ProviderRegistry
      */
     public function get(string $municipio): NFSeProviderConfigInterface
     {
+        $providerKey = $this->resolveProviderKey($municipio);
+
         // Retornar provider em cache se já instanciado
-        if (isset($this->providers[$municipio])) {
-            return $this->providers[$municipio];
+        if (isset($this->providers[$providerKey])) {
+            return $this->providers[$providerKey];
         }
-        
-        // Verificar se município está configurado
-        if (!isset($this->config[$municipio])) {
+
+        // Verificar se provider está configurado
+        if (!isset($this->config[$providerKey])) {
             throw new \RuntimeException(
-                "Município '{$municipio}' não configurado. " .
-                "Adicione em config/nfse-municipios.json"
+                "Provider '{$providerKey}' não configurado. " .
+                "Defina '" . self::NFSE_NATIONAL_KEY . "' em config/nfse-municipios.json"
             );
         }
-        
-        $config = $this->config[$municipio];
+
+        $config = $this->config[$providerKey];
         
         // Verificar se provider class está especificado
-        if (!isset($config['provider'])) {
+        $providerName = $config['provider'] ?? $config['provider_class'] ?? null;
+        if ($providerName === null) {
             throw new \RuntimeException(
-                "Provider class não especificado para município '{$municipio}'"
+                "Provider class não especificado para chave '{$providerKey}'"
             );
         }
         
         // Montar nome completo da classe
-        $providerClass = $this->resolveProviderClass($config['provider']);
+        $providerClass = $this->resolveProviderClass($providerName);
         
         // Verificar se classe existe
         if (!class_exists($providerClass)) {
@@ -94,9 +99,14 @@ class ProviderRegistry
         $provider = new $providerClass($config);
         
         // Cachear para reutilização
-        $this->providers[$municipio] = $provider;
+        $this->providers[$providerKey] = $provider;
         
         return $provider;
+    }
+
+    public function getNfseNacional(): NFSeProviderConfigInterface
+    {
+        return $this->get(self::NFSE_NATIONAL_KEY);
     }
     
     /**
@@ -146,13 +156,16 @@ class ProviderRegistry
      */
     public function getConfig(string $municipio): array
     {
-        if (!isset($this->config[$municipio])) {
+        $providerKey = $this->resolveProviderKey($municipio);
+
+        if (!isset($this->config[$providerKey])) {
             throw new \RuntimeException(
-                "Município '{$municipio}' não configurado. " .
-                "Adicione em config/nfse-municipios.json"
+                "Provider '{$providerKey}' não configurado. " .
+                "Defina '" . self::NFSE_NATIONAL_KEY . "' em config/nfse-municipios.json"
             );
         }
-        return $this->config[$municipio];
+
+        return $this->config[$providerKey];
     }
     
     /**
@@ -185,26 +198,29 @@ class ProviderRegistry
     public function validarConfiguracao(string $municipio): FiscalResponse
     {
         try {
-            if (!$this->has($municipio)) {
+            $providerKey = $this->resolveProviderKey($municipio);
+
+            if (!$this->has($providerKey)) {
                 return FiscalResponse::error(
-                    "Município '{$municipio}' não configurado",
+                    "Provider '{$providerKey}' não configurado",
                     'PROVIDER_NOT_FOUND',
                     'validacao_provider_config'
                 );
             }
             
-            $config = $this->getConfig($municipio);
+            $config = $this->getConfig($providerKey);
             $erros = [];
             
             // Validações básicas
-            if (empty($config['provider_class'])) {
-                $erros[] = 'provider_class não definido';
+            $providerClass = $config['provider_class'] ?? $config['provider'] ?? null;
+            if (empty($providerClass)) {
+                $erros[] = 'provider/provider_class não definido';
             }
-            if (empty($config['url_producao'])) {
-                $erros[] = 'url_producao não definida';
+            if (empty($config['url_producao']) && empty($config['wsdl_producao'])) {
+                $erros[] = 'url_producao/wsdl_producao não definida';
             }
-            if (empty($config['url_homologacao'])) {
-                $erros[] = 'url_homologacao não definida';
+            if (empty($config['url_homologacao']) && empty($config['wsdl_homologacao'])) {
+                $erros[] = 'url_homologacao/wsdl_homologacao não definida';
             }
             
             if (!empty($erros)) {
@@ -217,8 +233,10 @@ class ProviderRegistry
             
             return FiscalResponse::success([
                 'municipio' => $municipio,
+                'provider_key' => $providerKey,
+                'municipio_ignored' => $providerKey !== $municipio,
                 'config_valida' => true,
-                'provider_class' => $config['provider_class']
+                'provider_class' => $providerClass
             ], 'validacao_provider_config');
             
         } catch (\Exception $e) {
@@ -246,7 +264,7 @@ class ProviderRegistry
      */
     public function obterRegrasEspecificas(string $municipio): array
     {
-        if (!$this->has($municipio)) {
+        if (!$this->has($municipio) && !$this->has(self::NFSE_NATIONAL_KEY)) {
             return [];
         }
         
@@ -259,7 +277,7 @@ class ProviderRegistry
      */
     public function buscarFallback(string $municipio): ?string
     {
-        if (!$this->has($municipio)) {
+        if (!$this->has($municipio) && !$this->has(self::NFSE_NATIONAL_KEY)) {
             return null;
         }
         
@@ -272,7 +290,7 @@ class ProviderRegistry
      */
     public function obterVersaoSchema(string $municipio): string
     {
-        if (!$this->has($municipio)) {
+        if (!$this->has($municipio) && !$this->has(self::NFSE_NATIONAL_KEY)) {
             return '1.0'; // versão padrão
         }
         
@@ -286,5 +304,19 @@ class ProviderRegistry
     public function __wakeup()
     {
         throw new \Exception("Cannot unserialize singleton");
+    }
+
+    private function resolveProviderKey(string $input): string
+    {
+        if (isset($this->config[$input])) {
+            $alias = $this->config[$input]['alias_of'] ?? null;
+            return is_string($alias) && $alias !== '' ? $alias : $input;
+        }
+
+        if (isset($this->config[self::NFSE_NATIONAL_KEY])) {
+            return self::NFSE_NATIONAL_KEY;
+        }
+
+        return $input;
     }
 }

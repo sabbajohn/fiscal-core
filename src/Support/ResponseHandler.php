@@ -419,6 +419,87 @@ class ResponseHandler
     }
 
     /**
+     * Normaliza retorno XML da SEFAZ para estrutura amigável.
+     *
+     * @param string $xml
+     * @return array{
+     *   lote: ?array{cStat:?string,xMotivo:?string,cUF:?string,dhRecbto:?string},
+     *   protocolo: ?array{cStat:?string,xMotivo:?string,chNFe:?string,nProt:?string,dhRecbto:?string},
+     *   autorizado: bool,
+     *   status: string
+     * }
+     */
+    public function parseSefazRetorno(string $xml): array
+    {
+        $fallback = [
+            'lote' => null,
+            'protocolo' => null,
+            'autorizado' => false,
+            'status' => 'desconhecido',
+        ];
+
+        if ($xml === '') {
+            return $fallback;
+        }
+
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
+        if (!$dom->loadXML($xml)) {
+            libxml_clear_errors();
+            return $fallback;
+        }
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($dom);
+
+        $retEnviNodes = $xpath->query("//*[local-name()='retEnviNFe']");
+        $retEnvi = ($retEnviNodes && $retEnviNodes->length > 0) ? $retEnviNodes->item(0) : null;
+
+        $lote = null;
+        if ($retEnvi instanceof \DOMNode) {
+            $lote = [
+                'cStat' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'cStat'),
+                'xMotivo' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'xMotivo'),
+                'cUF' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'cUF'),
+                'dhRecbto' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'dhRecbto'),
+            ];
+        }
+
+        $infProtNodes = $xpath->query("//*[local-name()='infProt']");
+        $infProt = ($infProtNodes && $infProtNodes->length > 0) ? $infProtNodes->item(0) : null;
+
+        $protocolo = null;
+        if ($infProt instanceof \DOMNode) {
+            $protocolo = [
+                'cStat' => $this->firstChildTextByLocalName($xpath, $infProt, 'cStat'),
+                'xMotivo' => $this->firstChildTextByLocalName($xpath, $infProt, 'xMotivo'),
+                'chNFe' => $this->firstChildTextByLocalName($xpath, $infProt, 'chNFe'),
+                'nProt' => $this->firstChildTextByLocalName($xpath, $infProt, 'nProt'),
+                'dhRecbto' => $this->firstChildTextByLocalName($xpath, $infProt, 'dhRecbto'),
+            ];
+        }
+
+        $protStat = (string) ($protocolo['cStat'] ?? '');
+        $autorizado = in_array($protStat, ['100', '150'], true);
+        $status = $autorizado ? 'autorizada' : ($protStat !== '' ? 'rejeitada' : 'processada');
+
+        return [
+            'lote' => $lote,
+            'protocolo' => $protocolo,
+            'autorizado' => $autorizado,
+            'status' => $status,
+        ];
+    }
+
+    /**
+     * Retorna parse da SEFAZ em JSON.
+     */
+    public function parseSefazRetornoAsJson(string $xml): string
+    {
+        return json_encode($this->parseSefazRetorno($xml), JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
      * Converte exceções comuns em exceções fiscais específicas
      */
     public function convertToFiscalException(\Exception $e): FiscalException
@@ -579,5 +660,16 @@ class ResponseHandler
         } catch (\Exception $e) {
             return $this->handleException($e, 'executeWithCache');
         }
+    }
+
+    private function firstChildTextByLocalName(\DOMXPath $xpath, \DOMNode $contextNode, string $localName): ?string
+    {
+        $nodes = $xpath->query("./*[local-name()='{$localName}']", $contextNode);
+        if (!$nodes || $nodes->length === 0) {
+            return null;
+        }
+
+        $value = trim((string) $nodes->item(0)?->textContent);
+        return $value === '' ? null : $value;
     }
 }

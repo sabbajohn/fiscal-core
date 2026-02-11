@@ -3,9 +3,11 @@
 namespace freeline\FiscalCore\Facade;
 
 use freeline\FiscalCore\Adapters\NF\NFSeAdapter;
+use freeline\FiscalCore\Support\NFSeProviderResolver;
 use freeline\FiscalCore\Support\ResponseHandler;
 use freeline\FiscalCore\Support\FiscalResponse;
 use freeline\FiscalCore\Support\ProviderRegistry;
+use freeline\FiscalCore\Support\CertificateManager;
 
 /**
  * Facade para NFSe - Interface simplificada e com tratamento de erros
@@ -17,29 +19,39 @@ class NFSeFacade
     private ResponseHandler $responseHandler;
     private ?FiscalResponse $initializationError = null;
     private string $municipio;
+    private string $providerKey;
+    private bool $municipioIgnored = false;
+    private array $deprecationWarnings = [];
 
     public function __construct(string $municipio = 'curitiba', ?NFSeAdapter $nfse = null)
     {
         $this->municipio = $municipio;
         $this->responseHandler = new ResponseHandler();
+        $resolver = new NFSeProviderResolver();
+        $compat = $resolver->buildMetadata($municipio);
+        $this->providerKey = $compat['provider_key'];
+        $this->municipioIgnored = $compat['municipio_ignored'];
+        $this->deprecationWarnings = $compat['warnings'];
         
         if ($nfse !== null) {
             $this->nfse = $nfse;
         } else {
             try {
-                // Verifica se o município está configurado
                 $registry = ProviderRegistry::getInstance();
-                if (!$registry->has($municipio)) {
+                if (!$registry->has($this->providerKey)) {
                     $this->initializationError = FiscalResponse::error(
+                        "Provider NFSe nacional '{$this->providerKey}' não encontrado",
                         'PROVIDER_NOT_FOUND',
-                        "Provider para município '{$municipio}' não encontrado",
                         'nfse_initialization',
                         [
                             'available_municipios' => $registry->listMunicipios(),
+                            'provider_key' => $this->providerKey,
+                            'municipio_input' => $municipio,
+                            'municipio_ignored' => $this->municipioIgnored,
+                            'warnings' => $this->deprecationWarnings,
                             'suggestions' => [
-                                "Verifique se o município '{$municipio}' está configurado",
-                                'Use um dos municípios disponíveis listados',
-                                'Configure o município em config/nfse-municipios.json'
+                                "Configure '{$this->providerKey}' em config/nfse-municipios.json",
+                                "O parâmetro 'municipio' foi deprecado para NFSe e não define roteamento",
                             ]
                         ]
                     );
@@ -81,6 +93,9 @@ class NFSeFacade
                 'municipio' => $this->municipio
             ], 'nfse_emission', [
                 'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
                 'provider_info' => $this->nfse->getProviderInfo()
             ]);
         } catch (\Exception $e) {
@@ -106,7 +121,10 @@ class NFSeFacade
                 'municipio' => $this->municipio
             ], 'nfse_query', [
                 'chave' => $chave,
-                'municipio' => $this->municipio
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
             ]);
         } catch (\Exception $e) {
             return $this->responseHandler->handle($e, 'nfse_query');
@@ -133,10 +151,155 @@ class NFSeFacade
             ], 'nfse_cancellation', [
                 'chave' => $chave,
                 'motivo' => $motivo,
-                'municipio' => $this->municipio
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
             ]);
         } catch (\Exception $e) {
             return $this->responseHandler->handle($e, 'nfse_cancellation');
+        }
+    }
+
+    /**
+     * Substitui uma NFSe
+     */
+    public function substituir(string $chave, array $dados): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->substituir($chave, $dados);
+            return FiscalResponse::success([
+                'resultado' => $resultado,
+                'type' => 'nfse_substituicao',
+                'chave' => $chave,
+                'municipio' => $this->municipio,
+            ], 'nfse_substitution', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_substitution');
+        }
+    }
+
+    public function consultarPorRps(array $identificacaoRps): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->consultarPorRps($identificacaoRps);
+            return FiscalResponse::success([
+                'resultado' => $resultado,
+                'type' => 'nfse_consulta_rps',
+                'municipio' => $this->municipio,
+            ], 'nfse_query_by_rps', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_query_by_rps');
+        }
+    }
+
+    public function consultarLote(string $protocolo): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->consultarLote($protocolo);
+            return FiscalResponse::success([
+                'resultado' => $resultado,
+                'type' => 'nfse_consulta_lote',
+                'protocolo' => $protocolo,
+                'municipio' => $this->municipio,
+            ], 'nfse_query_lote', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_query_lote');
+        }
+    }
+
+    public function baixarXml(string $chave): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->baixarXml($chave);
+            return FiscalResponse::success([
+                'resultado' => $resultado,
+                'type' => 'nfse_xml_download',
+                'chave' => $chave,
+                'municipio' => $this->municipio,
+            ], 'nfse_download_xml', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_download_xml');
+        }
+    }
+
+    public function baixarDanfse(string $chave): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->baixarDanfse($chave);
+            return FiscalResponse::success([
+                'resultado' => $resultado,
+                'type' => 'nfse_danfse_download',
+                'chave' => $chave,
+                'municipio' => $this->municipio,
+            ], 'nfse_download_danfse', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_download_danfse');
+        }
+    }
+
+    public function listarMunicipiosNacionais(bool $forceRefresh = false): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->listarMunicipiosNacionais($forceRefresh);
+            return FiscalResponse::success($resultado['data'] ?? [], 'nfse_nacional_municipios', [
+                'source' => $resultado['metadata']['source'] ?? null,
+                'stale' => $resultado['metadata']['stale'] ?? null,
+                'force_refresh' => $forceRefresh,
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+            ]);
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_nacional_municipios');
+        }
+    }
+
+    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
+            return FiscalResponse::success($resultado['data'] ?? [], 'nfse_nacional_aliquotas', [
+                'source' => $resultado['metadata']['source'] ?? null,
+                'stale' => $resultado['metadata']['stale'] ?? null,
+                'force_refresh' => $forceRefresh,
+                'codigo_municipio' => $codigoMunicipio,
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+            ]);
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_nacional_aliquotas');
         }
     }
 
@@ -151,7 +314,10 @@ class NFSeFacade
             
             return FiscalResponse::success(['municipios' => $municipios], 'nfse_list_municipios', [
                 'total' => count($municipios),
-                'current_municipio' => $this->municipio
+                'current_municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
             ]);
         } catch (\Exception $e) {
             return $this->responseHandler->handle($e, 'nfse_list_municipios');
@@ -169,6 +335,9 @@ class NFSeFacade
 
         try {
             $info = $this->nfse->getProviderInfo();
+            $info['provider_key'] = $this->providerKey;
+            $info['municipio_ignored'] = $this->municipioIgnored;
+            $info['warnings'] = $this->deprecationWarnings;
             return FiscalResponse::success($info, 'nfse_provider_info');
         } catch (\Exception $e) {
             return $this->responseHandler->handle($e, 'nfse_provider_info');
@@ -180,7 +349,7 @@ class NFSeFacade
      */
     public function validarXML(string $xml): FiscalResponse
     {
-        return $this->responseHandler->execute(function() use ($xml) {
+        return $this->responseHandler->handle(function() use ($xml) {
             if (empty($xml)) {
                 throw new \InvalidArgumentException("XML não pode estar vazio");
             }
@@ -225,7 +394,7 @@ class NFSeFacade
      */
     public function validarPrestador(array $prestador): FiscalResponse
     {
-        return $this->responseHandler->execute(function() use ($prestador) {
+        return $this->responseHandler->handle(function() use ($prestador) {
             $erros = [];
             
             // Valida campos obrigatórios
@@ -272,32 +441,93 @@ class NFSeFacade
         
         try {
             $registry = ProviderRegistry::getInstance();
-            
-            if (!$registry->has($municipioToValidate)) {
+
+            if (!$registry->has($this->providerKey)) {
                 return FiscalResponse::error(
+                    "Provider NFSe nacional '{$this->providerKey}' não está configurado",
                     'MUNICIPALITY_NOT_CONFIGURED',
-                    "Município '{$municipioToValidate}' não está configurado",
                     'nfse_municipality_validation',
                     [
                         'available_municipios' => $registry->listMunicipios(),
+                        'provider_key' => $this->providerKey,
+                        'municipio_input' => $municipioToValidate,
+                        'municipio_ignored' => true,
+                        'warnings' => $this->deprecationWarnings,
                         'suggestions' => [
-                            'Configure o município em config/nfse-municipios.json',
-                            'Verifique o nome do município',
-                            'Use um dos municípios disponíveis'
+                            "Configure '{$this->providerKey}' em config/nfse-municipios.json",
+                            "Não é mais necessário configurar provider por município",
                         ]
                     ]
                 );
             }
 
-            $config = $registry->getConfig($municipioToValidate);
+            $config = $registry->getConfig($this->providerKey);
             return FiscalResponse::success([
                 'municipio' => $municipioToValidate,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => true,
                 'configured' => true,
                 'config_keys' => array_keys($config)
-            ], 'nfse_municipality_validation');
+            ], 'nfse_municipality_validation', [
+                'warnings' => $this->deprecationWarnings
+            ]);
             
         } catch (\Exception $e) {
             return $this->responseHandler->handle($e, 'nfse_municipality_validation');
+        }
+    }
+
+    public static function nacional(?NFSeAdapter $nfse = null): self
+    {
+        return new self('nfse_nacional', $nfse);
+    }
+
+    private function buildCompatibilityMetadata(): array
+    {
+        return [
+            'municipio' => $this->municipio,
+            'provider_key' => $this->providerKey,
+            'municipio_ignored' => $this->municipioIgnored,
+            'warnings' => $this->deprecationWarnings,
+        ];
+    }
+
+    /**
+     * Verifica prontidão para homologação NFSe Nacional.
+     */
+    public function verificarProntidaoHomologacao(): FiscalResponse
+    {
+        try {
+            $registry = ProviderRegistry::getInstance();
+            $config = $registry->getConfig($this->providerKey);
+
+            $required = ['provider', 'api_base_url', 'timeout', 'endpoints'];
+            $missing = [];
+            foreach ($required as $key) {
+                if (!array_key_exists($key, $config) || $config[$key] === '' || $config[$key] === []) {
+                    $missing[] = $key;
+                }
+            }
+
+            $signatureMode = (string) ($config['signature_mode'] ?? 'optional');
+            $certManager = CertificateManager::getInstance();
+            $certLoaded = $certManager->getCertificate() !== null;
+            $certValid = $certManager->isValid();
+
+            if ($signatureMode === 'required' && (!$certLoaded || !$certValid)) {
+                $missing[] = 'certificado_digital_valido';
+            }
+
+            return FiscalResponse::success([
+                'ready' => empty($missing),
+                'provider_key' => $this->providerKey,
+                'signature_mode' => $signatureMode,
+                'certificado_carregado' => $certLoaded,
+                'certificado_valido' => $certValid,
+                'missing_requirements' => $missing,
+            ], 'nfse_homologation_readiness', $this->buildCompatibilityMetadata());
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_homologation_readiness');
         }
     }
 }

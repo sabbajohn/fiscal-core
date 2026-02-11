@@ -1,5 +1,61 @@
 # Changelog
 
+## v1.1.0 - 2026-02-11
+
+### Added
+- Provider NFSe nacional com operações completas:
+  - emissão (`emitir`)
+  - consulta (`consultar`)
+  - cancelamento (`cancelar`)
+  - substituição (`substituir`)
+  - consulta por RPS/lote
+  - download XML/DANFSe
+- Serviço de catálogo nacional com cache local e fallback stale:
+  - municípios nacionais
+  - alíquotas por código IBGE
+- Normalização central de retorno SEFAZ para JSON em `ResponseHandler`:
+  - `parseSefazRetorno()`
+  - `parseSefazRetornoAsJson()`
+- Verificação de prontidão de homologação em `NFSeFacade`:
+  - `verificarProntidaoHomologacao()`
+
+### Changed
+- Arquitetura NFSe consolidada para modo nacional-only:
+  - resolução interna sempre para `nfse_nacional`
+  - parâmetro `municipio` mantido por compatibilidade e marcado como deprecado (metadata/warnings)
+- `ProviderRegistry` com suporte a fallback nacional e aliases legados (`alias_of`)
+- `NFSeAdapter` e `NFSeFacade` com metadata explícita:
+  - `provider_key`
+  - `municipio_ignored`
+  - `warnings`
+- `NacionalProvider` reforçado para homologação:
+  - geração de XML mais aderente ao padrão de integração
+  - assinatura XML opcional/obrigatória por configuração (`signature_mode`)
+  - parser robusto para retornos `CompNfse/InfNfse` com namespace
+
+### Config
+- `config/nfse-municipios.json` consolidado com bloco principal `nfse_nacional`
+- aliases legados (`curitiba`, `joinville`, etc.) apontando para `nfse_nacional`
+- novas chaves de config para homologação:
+  - `xml_namespace`
+  - `signature_mode`
+  - `backend`
+
+### Notes
+- Validação local de testes não executada neste ambiente por falha de runtime do PHP:
+  - `Library not loaded: /opt/homebrew/opt/net-snmp/lib/libnetsnmp.40.dylib`
+
+## v1.0.3 - 2026-02-11
+
+### Changed
+- Evolução do fluxo de montagem/validação de notas com melhorias em `NotaFiscal` e `NotaFiscalBuilder`.
+- Ajustes no `IdentificacaoDTO` para suportar novos campos de identificação.
+- Atualizações nos nós de documento fiscal:
+  - `EmitenteNode`
+  - `DestinatarioNode`
+  - `PagamentoNode`
+- Melhorias de validação e cobertura de campos adicionais no processo de composição da NFe/NFCe.
+
 ## v1.0.2 - 2026-02-11
 
 ### Changed
