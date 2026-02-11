@@ -22,30 +22,35 @@ class PagamentoNode implements NotaNodeInterface
     
     public function addToMake(Make $make): void
     {
+        $make->tagpag((object)[
+            'vTroco' => null,
+        ]);
+
         foreach ($this->pagamentos as $pag) {
-            $data = [
+            $data = (object)[
+                'indPag' => '0',
                 'tPag' => $pag->tPag,
                 'vPag' => number_format($pag->vPag, 2, '.', ''),
             ];
             
             // Dados do cartão (se houver)
             if ($pag->tpIntegra) {
-                $data['tpIntegra'] = $pag->tpIntegra;
+                $data->tpIntegra = $pag->tpIntegra;
             }
             
             if ($pag->cnpj) {
-                $data['CNPJ'] = $pag->cnpj;
+                $data->CNPJ = $pag->cnpj;
             }
             
             if ($pag->tBand) {
-                $data['tBand'] = $pag->tBand;
+                $data->tBand = $pag->tBand;
             }
             
             if ($pag->cAut) {
-                $data['cAut'] = $pag->cAut;
+                $data->cAut = $pag->cAut;
             }
             
-            $make->tagpag((object)$data);
+            $make->tagdetPag($data);
         }
     }
     

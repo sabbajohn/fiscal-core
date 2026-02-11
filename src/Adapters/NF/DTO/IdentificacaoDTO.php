@@ -125,7 +125,7 @@ class IdentificacaoDTO
         $obj->procEmi = $this->procEmi;
         $obj->verProc = $this->verProc;
         if ($this->dhSaiEnt) $obj->dhSaiEnt = $this->dhSaiEnt;
-        if ($this->indIntermed) $obj->indIntermed = $this->indIntermed;
+        if ($this->indIntermed !== null) $obj->indIntermed = $this->indIntermed;
         return $obj;
     }
 }

@@ -174,6 +174,9 @@ class NotaFiscalBuilder
             finNFe: $data['finNFe'] ?? 1,
             indFinal: $data['indFinal'] ?? 1,
             indPres: $data['indPres'] ?? 1,
+            procEmi: $data['procEmi'] ?? 0,
+            verProc: $data['verProc'] ?? '1.0.0',
+            indIntermed: isset($data['indIntermed']) ? (int)$data['indIntermed'] : null,
         );
         
         $this->nota->addNode(new IdentificacaoNode($dto));

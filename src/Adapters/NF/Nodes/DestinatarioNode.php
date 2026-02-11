@@ -15,41 +15,48 @@ class DestinatarioNode implements NotaNodeInterface
     
     public function addToMake(Make $make): void
     {
-        $data = [
+        $dest = [
             'xNome' => $this->dto->nome,
             'indIEDest' => $this->dto->indIEDest,
         ];
         
         // CPF ou CNPJ
         if (strlen($this->dto->cpfCnpj) === 11) {
-            $data['CPF'] = $this->dto->cpfCnpj;
+            $dest['CPF'] = $this->dto->cpfCnpj;
         } else {
-            $data['CNPJ'] = $this->dto->cpfCnpj;
+            $dest['CNPJ'] = $this->dto->cpfCnpj;
         }
         
-        // Endereço (opcional para consumidor final)
-        if ($this->dto->logradouro) {
-            $data['xLgr'] = $this->dto->logradouro;
-            $data['nro'] = $this->dto->numero;
-            $data['xCpl'] = $this->dto->complemento;
-            $data['xBairro'] = $this->dto->bairro;
-            $data['cMun'] = $this->dto->codigoMunicipio;
-            $data['xMun'] = $this->dto->nomeMunicipio;
-            $data['UF'] = $this->dto->uf;
-            $data['CEP'] = $this->dto->cep;
-            $data['cPais'] = $this->dto->codigoPais;
-            $data['xPais'] = $this->dto->nomePais;
+        if ($this->dto->inscricaoEstadual !== null && $this->dto->inscricaoEstadual !== '') {
+            $dest['IE'] = $this->dto->inscricaoEstadual;
         }
-        
+
         if ($this->dto->telefone) {
-            $data['fone'] = $this->dto->telefone;
+            $dest['fone'] = $this->dto->telefone;
         }
         
         if ($this->dto->email) {
-            $data['email'] = $this->dto->email;
+            $dest['email'] = $this->dto->email;
         }
         
-        $make->tagdest((object)$data);
+        $make->tagdest((object)$dest);
+
+        // Endereço do destinatário é uma tag separada em NFePHP: <enderDest>.
+        if ($this->dto->logradouro) {
+            $enderDest = [
+                'xLgr' => $this->dto->logradouro,
+                'nro' => $this->dto->numero,
+                'xCpl' => $this->dto->complemento,
+                'xBairro' => $this->dto->bairro,
+                'cMun' => $this->dto->codigoMunicipio,
+                'xMun' => $this->dto->nomeMunicipio,
+                'UF' => $this->dto->uf,
+                'CEP' => $this->dto->cep,
+                'cPais' => $this->dto->codigoPais,
+                'xPais' => $this->dto->nomePais,
+            ];
+            $make->tagenderDest((object)$enderDest);
+        }
     }
     
     public function validate(): bool

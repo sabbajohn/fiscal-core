@@ -20,7 +20,21 @@ class NotaFiscal
      */
     public function addNode(NotaNodeInterface $node): self
     {
-        $this->nodes[$node->getNodeType()] = $node;
+        $tipo = $node->getNodeType();
+
+        // Nodes repetíveis (itens) precisam ser acumulados para não sobrescrever.
+        if (in_array($tipo, ['produto', 'imposto'], true)) {
+            if (!isset($this->nodes[$tipo])) {
+                $this->nodes[$tipo] = [];
+            }
+            if (!is_array($this->nodes[$tipo])) {
+                $this->nodes[$tipo] = [$this->nodes[$tipo]];
+            }
+            $this->nodes[$tipo][] = $node;
+            return $this;
+        }
+
+        $this->nodes[$tipo] = $node;
         return $this;
     }
     
@@ -30,7 +44,18 @@ class NotaFiscal
     public function validate(): bool
     {
         foreach ($this->nodes as $node) {
-            $node->validate();
+            if (is_array($node)) {
+                foreach ($node as $item) {
+                    if ($item instanceof NotaNodeInterface) {
+                        $item->validate();
+                    }
+                }
+                continue;
+            }
+
+            if ($node instanceof NotaNodeInterface) {
+                $node->validate();
+            }
         }
         
         // Validações estruturais
