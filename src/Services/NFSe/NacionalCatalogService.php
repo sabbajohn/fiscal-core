@@ -3,35 +3,28 @@
 namespace freeline\FiscalCore\Services\NFSe;
 
 use freeline\FiscalCore\Support\Cache\FileCacheStore;
+use freeline\FiscalCore\Support\CertificateManager;
 
 class NacionalCatalogService
 {
-    private const DEFAULT_ENDPOINTS = [
-        'municipios' => '/catalogos/municipios',
-        'aliquotas_municipio' => '/catalogos/municipios/{codigo_municipio}/aliquotas',
-    ];
-
     private string $apiBaseUrl;
     private int $timeout;
     private FileCacheStore $cache;
     private int $ttl;
     private $httpClient;
-    private array $endpoints;
 
     public function __construct(
         string $apiBaseUrl,
         int $timeout = 30,
         ?FileCacheStore $cache = null,
         int $ttl = 86400,
-        ?callable $httpClient = null,
-        array $endpoints = []
+        ?callable $httpClient = null
     ) {
-        $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
+        $this->apiBaseUrl = $this->normalizeCatalogBaseUrl($apiBaseUrl);
         $this->timeout = $timeout;
         $this->cache = $cache ?? new FileCacheStore();
         $this->ttl = $ttl;
         $this->httpClient = $httpClient;
-        $this->endpoints = array_merge(self::DEFAULT_ENDPOINTS, $endpoints);
     }
 
     /**
@@ -42,7 +35,7 @@ class NacionalCatalogService
         $cacheKey = 'municipios';
         return $this->fetchWithCache(
             $cacheKey,
-            $this->resolveEndpoint('municipios'),
+            '/catalogos/municipios',
             $forceRefresh
         );
     }
@@ -50,19 +43,74 @@ class NacionalCatalogService
     /**
      * @return array{data: array, metadata: array}
      */
-    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
+    public function consultarAliquotasMunicipio(
+        string $codigoMunicipio,
+        ?string $codigoServico = null,
+        ?string $competencia = null,
+        bool $forceRefresh = false
+    ): array
     {
         if (!preg_match('/^\d{7}$/', $codigoMunicipio)) {
             throw new \InvalidArgumentException('Código do município deve conter 7 dígitos');
         }
 
-        $cacheKey = "aliquotas:{$codigoMunicipio}";
+        $codigoServicoNorm = preg_replace('/\s+/', '', trim((string)$codigoServico)) ?? '';
+        if ($codigoServicoNorm === '') {
+            throw new \InvalidArgumentException(
+                'Código do serviço é obrigatório para consulta de alíquota (/{codigoMunicipio}/{codigoServico}/{competencia}/aliquota).'
+            );
+        }
+
+        $competenciaNorm = $this->normalizeCompetencia($competencia);
+        $cacheKey = "aliquota:{$codigoMunicipio}:{$codigoServicoNorm}:{$competenciaNorm}";
+        $codigoMunicipioPath = rawurlencode($codigoMunicipio);
+        $codigoServicoPath = rawurlencode($codigoServicoNorm);
+        $competenciaPath = rawurlencode($competenciaNorm);
+
         return $this->fetchWithCache(
             $cacheKey,
-            $this->resolveEndpoint('aliquotas_municipio', [
-                'codigo_municipio' => $codigoMunicipio,
-                'ibge' => $codigoMunicipio,
-            ]),
+            "/{$codigoMunicipioPath}/{$codigoServicoPath}/{$competenciaPath}/aliquota",
+            $forceRefresh
+        );
+    }
+
+    /**
+     * @return array{data: array, metadata: array}
+     */
+    public function consultarHistoricoAliquotasMunicipio(
+        string $codigoMunicipio,
+        string $codigoServico,
+        bool $forceRefresh = false
+    ): array {
+        if (!preg_match('/^\d{7}$/', $codigoMunicipio)) {
+            throw new \InvalidArgumentException('Código do município deve conter 7 dígitos');
+        }
+        $codigoServicoNorm = preg_replace('/\s+/', '', trim($codigoServico)) ?? '';
+        if ($codigoServicoNorm === '') {
+            throw new \InvalidArgumentException('Código do serviço é obrigatório');
+        }
+
+        $cacheKey = "historico_aliquotas:{$codigoMunicipio}:{$codigoServicoNorm}";
+        return $this->fetchWithCache(
+            $cacheKey,
+            "/{$codigoMunicipio}/{$codigoServicoNorm}/historicoaliquotas",
+            $forceRefresh
+        );
+    }
+
+    /**
+     * @return array{data: array, metadata: array}
+     */
+    public function consultarConvenioMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
+    {
+        if (!preg_match('/^\d{7}$/', $codigoMunicipio)) {
+            throw new \InvalidArgumentException('Código do município deve conter 7 dígitos');
+        }
+
+        $cacheKey = "convenio:{$codigoMunicipio}";
+        return $this->fetchWithCache(
+            $cacheKey,
+            "/{$codigoMunicipio}/convenio",
             $forceRefresh
         );
     }
@@ -102,6 +150,29 @@ class NacionalCatalogService
                 ],
             ];
         } catch (\Throwable $e) {
+            $legacyPath = $this->toLegacyPath($path);
+            if ($legacyPath !== null) {
+                try {
+                    $json = $this->requestJson($legacyPath);
+                    $data = $json['data'] ?? $json;
+                    if (!is_array($data)) {
+                        $data = [];
+                    }
+                    $this->cache->put($cacheKey, $data);
+                    return [
+                        'data' => $data,
+                        'metadata' => [
+                            'source' => 'remote',
+                            'stale' => false,
+                            'cache_key' => $cacheKey,
+                            'fallback_legacy_path' => $legacyPath,
+                        ],
+                    ];
+                } catch (\Throwable $legacyError) {
+                    $e = $legacyError;
+                }
+            }
+
             if ($cached !== null) {
                 return [
                     'data' => is_array($cached['value']) ? $cached['value'] : [],
@@ -118,6 +189,37 @@ class NacionalCatalogService
         }
     }
 
+    private function normalizeCompetencia(?string $competencia): string
+    {
+        $raw = trim((string)$competencia);
+        if ($raw === '') {
+            return gmdate('Y-m-d\TH:i:s\Z');
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) === 1) {
+            return $raw . 'T00:00:00Z';
+        }
+        return $raw;
+    }
+
+    private function toLegacyPath(string $path): ?string
+    {
+        $parts = array_values(array_filter(explode('/', trim($path, '/'))));
+
+        // Endpoints de alíquotas migraram para o padrão raiz no ADN Parametrização.
+        // Não tentar fallback legado /catalogos para evitar chamadas inválidas.
+        if (count($parts) === 4 && $parts[3] === 'aliquota') {
+            return null;
+        }
+        if (count($parts) === 3 && $parts[2] === 'historicoaliquotas') {
+            return null;
+        }
+
+        if (count($parts) === 2 && $parts[1] === 'convenio') {
+            return "/catalogos/municipios/{$parts[0]}/convenio";
+        }
+        return null;
+    }
+
     private function requestJson(string $path): array
     {
         if (is_callable($this->httpClient)) {
@@ -128,20 +230,24 @@ class NacionalCatalogService
             throw new \RuntimeException('Cliente HTTP mock retornou payload inválido');
         }
 
-        $url = $this->buildUrl($path);
+        $url = $this->apiBaseUrl . $path;
         $headers = ["Accept: application/json"];
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
+            $tempCertFile = null;
+            $tempKeyFile = null;
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => $this->timeout,
                 CURLOPT_HTTPHEADER => $headers,
             ]);
+            $this->applyMutualTlsCurlOptions($ch, $tempCertFile, $tempKeyFile);
             $response = curl_exec($ch);
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlErr = curl_error($ch);
             curl_close($ch);
+            $this->cleanupTemporaryFiles($tempCertFile, $tempKeyFile);
 
             if ($response === false) {
                 throw new \RuntimeException("Erro cURL: {$curlErr}");
@@ -172,27 +278,63 @@ class NacionalCatalogService
         return $decoded;
     }
 
-    private function resolveEndpoint(string $key, array $vars = []): string
+    private function applyMutualTlsCurlOptions($ch, ?string &$tempCertFile = null, ?string &$tempKeyFile = null): void
     {
-        $endpoint = (string) ($this->endpoints[$key] ?? '');
-        if ($endpoint === '') {
-            throw new \RuntimeException("Endpoint de catálogo '{$key}' não configurado");
+        $certManager = CertificateManager::getInstance();
+        $certificate = $certManager->getCertificate();
+        if ($certificate === null) {
+            return;
         }
 
-        foreach ($vars as $name => $value) {
-            $endpoint = str_replace('{' . $name . '}', (string) $value, $endpoint);
+        $certPem = (string)$certificate;
+        $keyPem = (string)$certificate->privateKey;
+        if ($certPem === '' || $keyPem === '') {
+            return;
         }
 
-        return $endpoint;
+        $tempCertFile = tempnam(sys_get_temp_dir(), 'nfse_cat_cert_');
+        $tempKeyFile = tempnam(sys_get_temp_dir(), 'nfse_cat_key_');
+        if (!is_string($tempCertFile) || !is_string($tempKeyFile)) {
+            return;
+        }
+
+        file_put_contents($tempCertFile, $certPem);
+        file_put_contents($tempKeyFile, $keyPem);
+        @chmod($tempCertFile, 0600);
+        @chmod($tempKeyFile, 0600);
+
+        curl_setopt($ch, CURLOPT_SSLCERT, $tempCertFile);
+        curl_setopt($ch, CURLOPT_SSLKEY, $tempKeyFile);
+        curl_setopt($ch, CURLOPT_SSLCERTTYPE, 'PEM');
+        curl_setopt($ch, CURLOPT_SSLKEYTYPE, 'PEM');
     }
 
-    private function buildUrl(string $path): string
+    private function cleanupTemporaryFiles(?string ...$files): void
     {
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
+        foreach ($files as $file) {
+            if (is_string($file) && $file !== '' && file_exists($file)) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private function normalizeCatalogBaseUrl(string $apiBaseUrl): string
+    {
+        $trimmed = rtrim(trim($apiBaseUrl), '/');
+        if ($trimmed === '') {
+            return $trimmed;
         }
 
-        $normalized = str_starts_with($path, '/') ? $path : '/' . $path;
-        return $this->apiBaseUrl . $normalized;
+        $parsed = parse_url($trimmed);
+        if ($parsed === false) {
+            return $trimmed;
+        }
+
+        $path = rtrim((string)($parsed['path'] ?? ''), '/');
+        if ($path === '/parametrizacao') {
+            return $trimmed;
+        }
+
+        return $trimmed . '/parametrizacao';
     }
 }

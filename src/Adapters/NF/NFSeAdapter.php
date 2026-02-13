@@ -90,19 +90,39 @@ class NFSeAdapter implements NotaServicoInterface
         return $this->requireNacionalCapabilities()->listarMunicipiosNacionais($forceRefresh);
     }
 
-    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
+    public function consultarAliquotasMunicipio(
+        string $codigoMunicipio,
+        ?string $codigoServico = null,
+        ?string $competencia = null,
+        bool $forceRefresh = false
+    ): array
     {
-        return $this->requireNacionalCapabilities()->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
+        return $this->requireNacionalCapabilities()->consultarAliquotasMunicipio(
+            $codigoMunicipio,
+            $codigoServico,
+            $competencia,
+            $forceRefresh
+        );
     }
 
-    public function consultarContribuinteCnc(string $cpfCnpj): array
+    public function consultarConvenioMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
     {
-        return $this->requireNacionalCapabilities()->consultarContribuinteCnc($cpfCnpj);
+        return $this->requireNacionalCapabilities()->consultarConvenioMunicipio($codigoMunicipio, $forceRefresh);
     }
 
-    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array
+    public function validarLayoutDps(array $payload, bool $checkCatalog = true): array
     {
-        return $this->requireNacionalCapabilities()->verificarHabilitacaoCnc($cpfCnpj, $codigoMunicipio);
+        return $this->requireNacionalCapabilities()->validarLayoutDps($payload, $checkCatalog);
+    }
+
+    public function gerarXmlDpsPreview(array $payload): ?string
+    {
+        return $this->requireNacionalCapabilities()->gerarXmlDpsPreview($payload);
+    }
+
+    public function validarXmlDps(array $payload): array
+    {
+        return $this->requireNacionalCapabilities()->validarXmlDps($payload);
     }
 
     /**

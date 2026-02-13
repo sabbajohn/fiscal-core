@@ -280,19 +280,31 @@ class NFSeFacade
         }
     }
 
-    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): FiscalResponse
+    public function consultarAliquotasMunicipio(
+        string $codigoMunicipio,
+        ?string $codigoServico = null,
+        ?string $competencia = null,
+        bool $forceRefresh = false
+    ): FiscalResponse
     {
         if ($check = $this->checkNFSeInitialization()) {
             return $check;
         }
 
         try {
-            $resultado = $this->nfse->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
+            $resultado = $this->nfse->consultarAliquotasMunicipio(
+                $codigoMunicipio,
+                $codigoServico,
+                $competencia,
+                $forceRefresh
+            );
             return FiscalResponse::success($resultado['data'] ?? [], 'nfse_nacional_aliquotas', [
                 'source' => $resultado['metadata']['source'] ?? null,
                 'stale' => $resultado['metadata']['stale'] ?? null,
                 'force_refresh' => $forceRefresh,
                 'codigo_municipio' => $codigoMunicipio,
+                'codigo_servico' => $codigoServico,
+                'competencia' => $competencia,
                 'municipio' => $this->municipio,
                 'provider_key' => $this->providerKey,
                 'municipio_ignored' => $this->municipioIgnored,
@@ -303,31 +315,86 @@ class NFSeFacade
         }
     }
 
-    public function consultarContribuinteCnc(string $cpfCnpj): FiscalResponse
+    public function consultarConvenioMunicipio(string $codigoMunicipio, bool $forceRefresh = false): FiscalResponse
     {
         if ($check = $this->checkNFSeInitialization()) {
             return $check;
         }
 
         try {
-            $resultado = $this->nfse->consultarContribuinteCnc($cpfCnpj);
-            return FiscalResponse::success($resultado, 'nfse_cnc_contribuinte', $this->buildCompatibilityMetadata());
+            $resultado = $this->nfse->consultarConvenioMunicipio($codigoMunicipio, $forceRefresh);
+            return FiscalResponse::success($resultado['data'] ?? [], 'nfse_nacional_convenio', [
+                'source' => $resultado['metadata']['source'] ?? null,
+                'stale' => $resultado['metadata']['stale'] ?? null,
+                'force_refresh' => $forceRefresh,
+                'codigo_municipio' => $codigoMunicipio,
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+            ]);
         } catch (\Exception $e) {
-            return $this->responseHandler->handle($e, 'nfse_cnc_contribuinte');
+            return $this->responseHandler->handle($e, 'nfse_nacional_convenio');
         }
     }
 
-    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): FiscalResponse
+    public function validarLayoutDps(array $payload, bool $checkCatalog = true): FiscalResponse
     {
         if ($check = $this->checkNFSeInitialization()) {
             return $check;
         }
 
         try {
-            $resultado = $this->nfse->verificarHabilitacaoCnc($cpfCnpj, $codigoMunicipio);
-            return FiscalResponse::success($resultado, 'nfse_cnc_habilitacao', $this->buildCompatibilityMetadata());
+            $resultado = $this->nfse->validarLayoutDps($payload, $checkCatalog);
+            return FiscalResponse::success($resultado, 'nfse_nacional_layout_check', [
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+                'check_catalog' => $checkCatalog,
+            ]);
         } catch (\Exception $e) {
-            return $this->responseHandler->handle($e, 'nfse_cnc_habilitacao');
+            return $this->responseHandler->handle($e, 'nfse_nacional_layout_check');
+        }
+    }
+
+    public function gerarXmlDpsPreview(array $payload): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $xml = $this->nfse->gerarXmlDpsPreview($payload);
+            return FiscalResponse::success([
+                'xml' => $xml,
+            ], 'nfse_nacional_layout_preview', [
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+            ]);
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_nacional_layout_preview');
+        }
+    }
+
+    public function validarXmlDps(array $payload): FiscalResponse
+    {
+        if ($check = $this->checkNFSeInitialization()) {
+            return $check;
+        }
+
+        try {
+            $resultado = $this->nfse->validarXmlDps($payload);
+            return FiscalResponse::success($resultado, 'nfse_nacional_xml_check', [
+                'municipio' => $this->municipio,
+                'provider_key' => $this->providerKey,
+                'municipio_ignored' => $this->municipioIgnored,
+                'warnings' => $this->deprecationWarnings,
+            ]);
+        } catch (\Exception $e) {
+            return $this->responseHandler->handle($e, 'nfse_nacional_xml_check');
         }
     }
 

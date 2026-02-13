@@ -12,7 +12,6 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 {
     private NacionalCatalogService $catalogService;
     private $httpClient;
-    private array $cncEndpoints = [];
 
     public function __construct(array $config)
     {
@@ -22,37 +21,48 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 
         $cacheDir = $config['cache_dir'] ?? null;
         $cacheTtl = (int) ($config['cache_ttl'] ?? 86400);
-        $catalogBaseUrl = $this->resolveServiceBase((string) ($config['catalog_service'] ?? 'cnc_consulta'));
-        $catalogEndpoints = [];
-        if (is_array($config['catalog_endpoints'] ?? null)) {
-            foreach ($config['catalog_endpoints'] as $key => $route) {
-                if (!is_string($route) || $route === '') {
-                    continue;
-                }
-                $catalogEndpoints[$key] = $this->resolveConfiguredRoute($route);
-            }
-        }
-        $this->cncEndpoints = $this->buildCncEndpoints($config);
+        $catalogBaseUrl = $this->resolveCatalogBaseUrl();
+        $catalogUseCustomHttpClient = (bool)($config['catalog_use_custom_http_client'] ?? false);
 
         $this->catalogService = new NacionalCatalogService(
-            $catalogBaseUrl !== '' ? $catalogBaseUrl : $this->getNationalApiBaseUrl(),
+            $catalogBaseUrl,
             $this->getTimeout(),
             new FileCacheStore($cacheDir),
             $cacheTtl,
-            is_callable($this->httpClient)
+            ($catalogUseCustomHttpClient && is_callable($this->httpClient))
                 ? function (string $path) {
                     return call_user_func($this->httpClient, 'GET', $path, null, []);
                 }
-                : null,
-            $catalogEndpoints
+                : null
         );
+    }
+
+    private function resolveCatalogBaseUrl(): string
+    {
+        $serviceBase = trim((string)($this->config['services']['parametrizacao'][$this->ambiente] ?? ''));
+        if ($serviceBase !== '') {
+            return $this->normalizeBaseUrl($serviceBase);
+        }
+
+        $paramApiBase = trim((string)($this->config['param_api_base_url'] ?? ''));
+        if ($paramApiBase !== '') {
+            return $this->normalizeBaseUrl($paramApiBase);
+        }
+
+        $fallback = $this->ambiente === 'producao'
+            ? 'https://adn.nfse.gov.br/parametrizacao'
+            : 'https://adn.producaorestrita.nfse.gov.br/parametrizacao';
+
+        return $fallback;
     }
 
     public function emitir(array $dados): string
     {
         $this->validarDados($dados);
-        $xml = $this->montarXmlRps($dados);
+        $this->validarDadosDpsNacional($dados);
+        $xml = $this->montarXmlDpsNacional($dados);
         $xml = $this->assinarXmlSeNecessario($xml);
+        $xml = $this->ensureUtf8XmlForTransmission($xml);
 
         return $this->enviarOperacao('emitir', $xml);
     }
@@ -64,7 +74,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         $xml = $this->buildConsultaXml($chave);
-        return $this->enviarOperacao('consultar', $xml, ['id' => $chave]);
+        return $this->enviarOperacao('consultar', $xml);
     }
 
     public function cancelar(string $chave, string $motivo, ?string $protocolo = null): bool
@@ -74,7 +84,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         $xml = $this->buildCancelamentoXml($chave, $motivo, $protocolo);
-        $response = $this->enviarOperacao('cancelar', $xml, ['id' => $chave]);
+        $response = $this->enviarOperacao('cancelar', $xml);
         $parsed = $this->processarResposta($response);
 
         return (bool) ($parsed['sucesso'] ?? false);
@@ -139,63 +149,206 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $this->catalogService->listarMunicipios($forceRefresh);
     }
 
-    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
+    public function consultarAliquotasMunicipio(
+        string $codigoMunicipio,
+        ?string $codigoServico = null,
+        ?string $competencia = null,
+        bool $forceRefresh = false
+    ): array
     {
-        return $this->catalogService->consultarAliquotasMunicipio($codigoMunicipio, $forceRefresh);
+        return $this->catalogService->consultarAliquotasMunicipio(
+            $codigoMunicipio,
+            $codigoServico,
+            $competencia,
+            $forceRefresh
+        );
     }
 
-    public function consultarContribuinteCnc(string $cpfCnpj): array
+    public function consultarConvenioMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array
     {
-        $documento = $this->normalizeCpfCnpj($cpfCnpj);
-        $path = $this->resolveCncEndpoint('contribuinte', ['cpfCnpj' => $documento]);
-        $payload = $this->requestJson('GET', $path);
-
-        return [
-            'documento' => $documento,
-            'habilitado' => $this->extractHabilitado($payload),
-            'situacao' => $this->extractSituacao($payload),
-            'dados' => $payload,
-            'metadata' => [
-                'fonte' => 'cnc_contribuinte',
-                'path' => $path,
-            ],
-        ];
+        return $this->catalogService->consultarConvenioMunicipio($codigoMunicipio, $forceRefresh);
     }
 
-    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array
+    public function validarLayoutDps(array $payload, bool $checkCatalog = true): array
     {
-        $documento = $this->normalizeCpfCnpj($cpfCnpj);
-        $vars = [
-            'cpfCnpj' => $documento,
-            'codigo_municipio' => $codigoMunicipio ?? '',
+        $errors = [];
+        $warnings = [];
+
+        $required = [
+            'id' => (string)($payload['id'] ?? ''),
+            'tpAmb' => (string)($payload['tpAmb'] ?? ''),
+            'dhEmi' => (string)($payload['dhEmi'] ?? ''),
+            'verAplic' => (string)($payload['verAplic'] ?? ''),
+            'serie' => (string)($payload['serie'] ?? ''),
+            'nDPS' => (string)($payload['nDPS'] ?? ''),
+            'dCompet' => (string)($payload['dCompet'] ?? ''),
+            'tpEmit' => (string)($payload['tpEmit'] ?? ''),
+            'cLocEmi' => (string)($payload['cLocEmi'] ?? ''),
+            'prestador.cnpj' => (string)($payload['prestador']['cnpj'] ?? ''),
+            'prestador.regTrib.opSimpNac' => (string)($payload['prestador']['opSimpNac'] ?? ''),
+            'prestador.regTrib.regEspTrib' => (string)($payload['prestador']['regEspTrib'] ?? ''),
+            'serv.cLocPrestacao' => (string)($payload['servico']['cLocPrestacao'] ?? ''),
+            'serv.cTribNac' => (string)($payload['servico']['cTribNac'] ?? ''),
+            'serv.xDescServ' => (string)($payload['servico']['descricao'] ?? ''),
+            'valores.vServPrest.vServ' => (string)($payload['valor_servicos'] ?? ''),
+            'valores.trib.tribMun.tribISSQN' => (string)($payload['servico']['tribISSQN'] ?? ''),
+            'valores.trib.tribMun.tpRetISSQN' => (string)($payload['servico']['tpRetISSQN'] ?? ''),
         ];
-        $path = $this->resolveCncEndpoint('habilitacao', $vars);
 
-        try {
-            $payload = $this->requestJson('GET', $path);
-            $source = 'cnc_habilitacao';
-        } catch (\Throwable $e) {
-            // Fallback para manter operação resiliente quando endpoint dedicado
-            // de habilitação não estiver disponível no ambiente.
-            $fallback = $this->consultarContribuinteCnc($documento);
-            $fallback['metadata']['fallback_error'] = $e->getMessage();
-            $fallback['metadata']['fonte'] = 'cnc_contribuinte_fallback';
-            $fallback['codigo_municipio'] = $codigoMunicipio;
+        foreach ($required as $path => $value) {
+            if (trim((string)$value) === '') {
+                $errors[] = "Campo obrigatório ausente no layout DPS: {$path}";
+            }
+        }
 
-            return $fallback;
+        $id = (string)($payload['id'] ?? '');
+        if ($id !== '' && !preg_match('/^DPS\d{42}$/', $id)) {
+            $errors[] = "Formato inválido para DPS/infDPS/id: '{$id}' (esperado literal DPS + 42 dígitos).";
+        }
+
+        $cTribNac = $this->onlyDigits((string)($payload['servico']['cTribNac'] ?? ''));
+        if (strlen($cTribNac) !== 6) {
+            $errors[] = 'cTribNac deve conter 6 dígitos numéricos.';
+        }
+
+        $cLocEmi = $this->onlyDigits((string)($payload['cLocEmi'] ?? ''));
+        if (strlen($cLocEmi) !== 7) {
+            $errors[] = 'cLocEmi deve conter 7 dígitos (código IBGE).';
+        }
+
+        $aliqPayload = (float)($payload['servico']['aliquota'] ?? 0);
+        $tribIssqnPayload = (string)($payload['servico']['tribISSQN'] ?? '');
+        if ($tribIssqnPayload === '1' && $aliqPayload <= 0) {
+            $errors[] = 'Para tribISSQN=1, informe alíquota ISS > 0 (campo servico.aliquota) para gerar pAliq.';
+        }
+        $catalogSummary = null;
+        if ($checkCatalog && strlen($cLocEmi) === 7) {
+            try {
+                $competencia = $this->normalizeCompetenciaForParamApi((string)($payload['dCompet'] ?? ''));
+                $aliqResponse = $this->catalogService->consultarAliquotasMunicipio(
+                    $cLocEmi,
+                    $cTribNac !== '' ? $cTribNac : null,
+                    $competencia,
+                    false
+                );
+
+                $catalogData = $aliqResponse['data'] ?? [];
+                $catalogAliq = $this->extractAliquotaMunicipalFromCatalog(
+                    is_array($catalogData) ? $catalogData : [],
+                    $cTribNac
+                );
+
+                $catalogSummary = [
+                    'codigoMunicipio' => $cLocEmi,
+                    'cTribNac' => $cTribNac,
+                    'competencia' => $competencia,
+                    'aliquotaCatalogo' => $catalogAliq,
+                ];
+
+                if ($catalogAliq === null) {
+                    $warnings[] = "Catálogo nacional não retornou alíquota para cTribNac {$cTribNac} no município {$cLocEmi}.";
+                } elseif ($aliqPayload <= 0) {
+                    $warnings[] = "Alíquota não informada no payload. Catálogo sugere {$catalogAliq}.";
+                } elseif (abs($aliqPayload - $catalogAliq) > 0.0001) {
+                    $warnings[] = "Alíquota do payload ({$aliqPayload}) difere do catálogo ({$catalogAliq}) para cTribNac {$cTribNac}.";
+                }
+            } catch (\Throwable $e) {
+                $warnings[] = 'Falha ao consultar parametrização nacional de alíquotas: ' . $e->getMessage();
+            }
         }
 
         return [
-            'documento' => $documento,
-            'codigo_municipio' => $codigoMunicipio,
-            'habilitado' => $this->extractHabilitado($payload, $codigoMunicipio),
-            'situacao' => $this->extractSituacao($payload),
-            'motivo' => $this->extractMotivo($payload),
-            'dados' => $payload,
-            'metadata' => [
-                'fonte' => $source,
-                'path' => $path,
-            ],
+            'valid' => count($errors) === 0,
+            'errors' => $errors,
+            'warnings' => $warnings,
+            'catalog' => $catalogSummary,
+        ];
+    }
+
+    public function gerarXmlDpsPreview(array $payload): ?string
+    {
+        try {
+            return $this->montarXmlDpsNacional($payload);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    public function validarXmlDps(array $payload): array
+    {
+        $xml = $this->gerarXmlDpsPreview($payload);
+        if ($xml === null || trim($xml) === '') {
+            return [
+                'valid' => false,
+                'xml' => null,
+                'errors' => ['Não foi possível gerar o XML DPS para validação pré-envio.'],
+                'missingTags' => [],
+            ];
+        }
+
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
+        if (!$dom->loadXML($xml)) {
+            $libErrors = libxml_get_errors();
+            libxml_clear_errors();
+            $first = $libErrors[0]->message ?? 'XML inválido';
+            return [
+                'valid' => false,
+                'xml' => $xml,
+                'errors' => ['XML inválido: ' . trim((string)$first)],
+                'missingTags' => [],
+            ];
+        }
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath($dom);
+        $wrapInNfse = $this->shouldWrapDpsInNfse();
+        $dpsBasePath = $wrapInNfse
+            ? '/*[local-name()="NFSe"]/*[local-name()="infNFSe"]/*[local-name()="DPS"]'
+            : '/*[local-name()="DPS"]';
+        $required = [
+            ['tag' => 'DPS', 'xpath' => $dpsBasePath],
+            ['tag' => 'infDPS', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]'],
+            ['tag' => 'infDPS/@Id', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/@Id'],
+            ['tag' => 'tpAmb', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="tpAmb"]'],
+            ['tag' => 'dhEmi', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="dhEmi"]'],
+            ['tag' => 'serie', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="serie"]'],
+            ['tag' => 'nDPS', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="nDPS"]'],
+            ['tag' => 'dCompet', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="dCompet"]'],
+            ['tag' => 'cLocEmi', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="cLocEmi"]'],
+            ['tag' => 'prest', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="prest"]'],
+            ['tag' => 'serv', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="serv"]'],
+            ['tag' => 'serv/locPrest/cLocPrestacao', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="serv"]/*[local-name()="locPrest"]/*[local-name()="cLocPrestacao"]'],
+            ['tag' => 'serv/cServ/cTribNac', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="serv"]/*[local-name()="cServ"]/*[local-name()="cTribNac"]'],
+            ['tag' => 'serv/cServ/xDescServ', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="serv"]/*[local-name()="cServ"]/*[local-name()="xDescServ"]'],
+            ['tag' => 'valores/vServPrest/vServ', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="valores"]/*[local-name()="vServPrest"]/*[local-name()="vServ"]'],
+            ['tag' => 'valores/trib/tribMun/tribISSQN', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="valores"]/*[local-name()="trib"]/*[local-name()="tribMun"]/*[local-name()="tribISSQN"]'],
+            ['tag' => 'valores/trib/tribMun/tpRetISSQN', 'xpath' => $dpsBasePath . '/*[local-name()="infDPS"]/*[local-name()="valores"]/*[local-name()="trib"]/*[local-name()="tribMun"]/*[local-name()="tpRetISSQN"]'],
+        ];
+
+        $missingTags = [];
+        foreach ($required as $rule) {
+            $nodes = $xpath->query($rule['xpath']);
+            if (!$nodes || $nodes->length === 0) {
+                $missingTags[] = [
+                    'tag' => $rule['tag'],
+                    'xpath' => $rule['xpath'],
+                ];
+            }
+        }
+
+        $errors = [];
+        if (!empty($missingTags)) {
+            foreach ($missingTags as $missing) {
+                $errors[] = "Tag obrigatória ausente: {$missing['tag']} ({$missing['xpath']})";
+            }
+        }
+
+        return [
+            'valid' => count($errors) === 0,
+            'xml' => $xml,
+            'errors' => $errors,
+            'missingTags' => $missingTags,
         ];
     }
 
@@ -279,6 +432,154 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $dom->saveXML() ?: '';
     }
 
+    protected function montarXmlDpsNacional(array $dados): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->formatOutput = false;
+
+        $serie = $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'), 5, '1');
+        $nDps = $this->normalizeNumeric((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'), 15, '1');
+        $dCompet = (string)($dados['dCompet'] ?? date('Y-m-d'));
+        $tpAmb = (string)($dados['tpAmb'] ?? ($this->getAmbiente() === 'producao' ? '1' : '2'));
+        $dhEmi = (string)($dados['dhEmi'] ?? gmdate('Y-m-d\TH:i:s\Z'));
+        $verAplic = (string)($dados['verAplic'] ?? $this->config['ver_aplic'] ?? 'invoiceflow-1.0');
+        $tpEmit = (string)($dados['tpEmit'] ?? '1');
+
+        $versao = (string)($this->config['dps_versao'] ?? '1.00');
+        $dpsId = $this->buildDpsId($dados, $serie, $nDps);
+        $wrapInNfse = $this->shouldWrapDpsInNfse();
+
+        if ($wrapInNfse) {
+            $root = $dom->createElement('NFSe');
+            $root->setAttribute('versao', $versao);
+            $dom->appendChild($root);
+
+            $infNfse = $dom->createElement('infNFSe');
+            $nfseId = (string)($dados['nfse']['id'] ?? $dados['nfse_id'] ?? ('NFSe' . substr($dpsId, 3)));
+            if ($nfseId !== '') {
+                $infNfse->setAttribute('Id', $nfseId);
+            }
+            $root->appendChild($infNfse);
+
+            $dps = $dom->createElement('DPS');
+            $dps->setAttribute('versao', $versao);
+            $infNfse->appendChild($dps);
+        } else {
+            $dps = $dom->createElement('DPS');
+            $dps->setAttribute('versao', $versao);
+            $dom->appendChild($dps);
+        }
+
+        $inf = $dom->createElement('infDPS');
+        $inf->setAttribute('Id', $dpsId);
+        $dps->appendChild($inf);
+        $this->appendNodeNoNs($dom, $inf, 'id', $dpsId);
+
+        $this->appendNodeNoNs($dom, $inf, 'tpAmb', $tpAmb);
+        $this->appendNodeNoNs($dom, $inf, 'dhEmi', $dhEmi);
+        $this->appendNodeNoNs($dom, $inf, 'verAplic', $verAplic);
+        $this->appendNodeNoNs($dom, $inf, 'serie', $serie);
+        $this->appendNodeNoNs($dom, $inf, 'nDPS', $nDps);
+        $this->appendNodeNoNs($dom, $inf, 'dCompet', $dCompet);
+        $this->appendNodeNoNs($dom, $inf, 'tpEmit', $tpEmit);
+
+        $cLocEmiInput = (string)($dados['cLocEmi'] ?? $dados['prestador']['codigoMunicipio'] ?? $this->getCodigoMunicipio());
+        $cLocEmi = str_pad(substr($this->onlyDigits($cLocEmiInput), 0, 7), 7, '0', STR_PAD_LEFT);
+        $this->appendNodeNoNs($dom, $inf, 'cLocEmi', $cLocEmi);
+
+        $prest = $dom->createElement('prest');
+        $inf->appendChild($prest);
+        $prestDoc = $this->onlyDigits((string)($dados['prestador']['cnpj'] ?? ''));
+        if (strlen($prestDoc) === 14) {
+            $this->appendNodeNoNs($dom, $prest, 'CNPJ', $prestDoc);
+        } else {
+            $this->appendNodeNoNs($dom, $prest, 'CPF', str_pad(substr($prestDoc, 0, 11), 11, '0', STR_PAD_LEFT));
+        }
+        $prestIm = trim((string)($dados['prestador']['inscricaoMunicipal'] ?? ''));
+        if ($prestIm !== '') {
+            $this->appendNodeNoNs($dom, $prest, 'IM', $prestIm);
+        }
+        $prestNome = trim((string)($dados['prestador']['razaoSocial'] ?? ''));
+        if ($prestNome !== '' && $tpEmit !== '1') {
+            $this->appendNodeNoNs($dom, $prest, 'xNome', $prestNome);
+        }
+
+        $regTrib = $dom->createElement('regTrib');
+        $prest->appendChild($regTrib);
+        $this->appendNodeNoNs($dom, $regTrib, 'opSimpNac', (string)($dados['prestador']['opSimpNac'] ?? '1'));
+        $this->appendNodeNoNs($dom, $regTrib, 'regEspTrib', (string)($dados['prestador']['regEspTrib'] ?? '0'));
+
+        $tomadorDoc = $this->onlyDigits((string)($dados['tomador']['documento'] ?? ''));
+        $tomadorNome = trim((string)($dados['tomador']['razaoSocial'] ?? $dados['tomador']['nome'] ?? ''));
+        if ($tomadorDoc !== '' && $tomadorNome !== '') {
+            $toma = $dom->createElement('toma');
+            $inf->appendChild($toma);
+            if (strlen($tomadorDoc) === 14) {
+                $this->appendNodeNoNs($dom, $toma, 'CNPJ', $tomadorDoc);
+            } else {
+                $this->appendNodeNoNs($dom, $toma, 'CPF', str_pad(substr($tomadorDoc, 0, 11), 11, '0', STR_PAD_LEFT));
+            }
+            $this->appendNodeNoNs($dom, $toma, 'xNome', $tomadorNome);
+        }
+
+        $serv = $dom->createElement('serv');
+        $inf->appendChild($serv);
+
+        $locPrest = $dom->createElement('locPrest');
+        $serv->appendChild($locPrest);
+        $cLocPrestInput = (string)($dados['servico']['cLocPrestacao'] ?? $dados['servico']['codigo_municipio'] ?? $cLocEmi);
+        $cLocPrest = str_pad(substr($this->onlyDigits($cLocPrestInput), 0, 7), 7, '0', STR_PAD_LEFT);
+        $this->appendNodeNoNs($dom, $locPrest, 'cLocPrestacao', $cLocPrest);
+
+        $cServ = $dom->createElement('cServ');
+        $serv->appendChild($cServ);
+        $cTribNac = $this->normalizeCTribNac((string)($dados['servico']['cTribNac'] ?? $dados['servico']['codigoServicoNacional'] ?? $dados['servico']['codigo'] ?? ''));
+        if ($cTribNac === '') {
+            $cTribNac = '010101';
+        }
+        $this->appendNodeNoNs($dom, $cServ, 'cTribNac', $cTribNac);
+        $this->appendNodeNoNs($dom, $cServ, 'xDescServ', (string)($dados['servico']['descricao'] ?? $dados['servico']['discriminacao'] ?? 'Servico'));
+
+        $valores = $dom->createElement('valores');
+        $inf->appendChild($valores);
+
+        $vServPrest = $dom->createElement('vServPrest');
+        $valores->appendChild($vServPrest);
+        $valorServicos = (float)($dados['valor_servicos'] ?? 0);
+        $this->appendNodeNoNs($dom, $vServPrest, 'vServ', $this->formatDecimal($valorServicos, 2));
+
+        $trib = $dom->createElement('trib');
+        $valores->appendChild($trib);
+        $tribMun = $dom->createElement('tribMun');
+        $trib->appendChild($tribMun);
+        $tribIssqn = (string)($dados['servico']['tribISSQN'] ?? '1');
+        $this->appendNodeNoNs($dom, $tribMun, 'tribISSQN', $tribIssqn);
+        $this->appendNodeNoNs($dom, $tribMun, 'tpRetISSQN', (string)($dados['servico']['tpRetISSQN'] ?? '1'));
+        $aliquota = $this->normalizeDpsAliquotaPercent((float)($dados['servico']['aliquota'] ?? 0));
+        $sendPAliq = (bool)($this->config['dps_send_paliq'] ?? ($tribIssqn === '1'));
+        if (array_key_exists('enviarPAliq', (array)($dados['servico'] ?? []))) {
+            $sendPAliq = (bool)$dados['servico']['enviarPAliq'];
+        }
+        if ($sendPAliq && $aliquota > 0) {
+            $this->appendNodeNoNs($dom, $tribMun, 'pAliq', $this->formatDecimal($aliquota, 2));
+        }
+
+        $totTrib = $dom->createElement('totTrib');
+        $trib->appendChild($totTrib);
+        $vTotTrib = $dom->createElement('vTotTrib');
+        $totTrib->appendChild($vTotTrib);
+        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribFed', '0.00');
+        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribEst', '0.00');
+        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribMun', '0.00');
+        $pTotTrib = $dom->createElement('pTotTrib');
+        $totTrib->appendChild($pTotTrib);
+        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribFed', '0.00');
+        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribEst', '0.00');
+        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribMun', '0.00');
+
+        return $dom->saveXML() ?: '';
+    }
+
     protected function processarResposta(string $xmlResposta): array
     {
         if ($xmlResposta === '') {
@@ -286,6 +587,45 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
                 'sucesso' => false,
                 'mensagem' => 'Resposta vazia',
                 'dados' => [],
+            ];
+        }
+
+        $json = json_decode($xmlResposta, true);
+        if (is_array($json)) {
+            $mensagemErro = $json['erro']['mensagem']
+                ?? $json['erro']['descricao']
+                ?? (($json['erros'][0]['mensagem'] ?? null))
+                ?? (($json['erros'][0]['descricao'] ?? null))
+                ?? null;
+            $nfseXml = $this->decodeGZipBase64((string)($json['nfseXmlGZipB64'] ?? ''));
+            $idDps = (string)($json['idDps'] ?? $json['idDPS'] ?? '');
+            $chave = (string)($json['chaveAcesso'] ?? '');
+
+            if ($nfseXml !== null) {
+                return [
+                    'sucesso' => true,
+                    'mensagem' => 'Processado com sucesso',
+                    'dados' => [
+                        'xml_retorno' => $nfseXml,
+                        'id_dps' => $idDps !== '' ? $idDps : null,
+                        'chave_acesso' => $chave !== '' ? $chave : null,
+                        'numero_nfse' => null,
+                        'codigo_verificacao' => null,
+                        'protocolo' => null,
+                        'link_visualizacao' => null,
+                        'cstat' => null,
+                        'xmotivo' => null,
+                    ],
+                ];
+            }
+
+            return [
+                'sucesso' => false,
+                'mensagem' => (string)($mensagemErro ?: 'Falha no processamento da NFS-e'),
+                'dados' => [
+                    'id_dps' => $idDps !== '' ? $idDps : null,
+                    'chave_acesso' => $chave !== '' ? $chave : null,
+                ],
             ];
         }
 
@@ -348,7 +688,8 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             throw new \InvalidArgumentException('CNPJ do prestador inválido');
         }
 
-        if (empty($dados['servico']['codigo'])) {
+        $codigoServico = (string)($dados['servico']['codigo'] ?? $dados['servico']['cTribNac'] ?? $dados['servico']['codigoServicoNacional'] ?? '');
+        if (trim($codigoServico) === '') {
             throw new \InvalidArgumentException('Código de serviço é obrigatório');
         }
 
@@ -372,15 +713,147 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return true;
     }
 
-    private function enviarOperacao(string $operacao, ?string $xml = null, array $routeParams = []): string
+    private function shouldWrapDpsInNfse(): bool
     {
-        [$method, $path] = $this->resolveOperationRequest($operacao, $routeParams);
-        $payload = in_array($method, ['GET', 'DELETE'], true) ? null : $xml;
+        $root = strtolower((string)($this->config['dps_root'] ?? 'nfse'));
+        if ($root === 'dps') {
+            return false;
+        }
+        if ($root === 'nfse') {
+            return true;
+        }
+        return true;
+    }
 
-        $response = $this->requestHttp($method, $path, $payload, [
-            'Content-Type: application/xml',
-            'Accept: application/xml',
-        ]);
+    private function validarDadosDpsNacional(array $dados): void
+    {
+        $errors = [];
+
+        $dCompet = (string)($dados['dCompet'] ?? date('Y-m-d'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dCompet)) {
+            $errors[] = 'dCompet deve estar no formato YYYY-MM-DD.';
+        }
+
+        $tpAmb = (string)($dados['tpAmb'] ?? ($this->getAmbiente() === 'producao' ? '1' : '2'));
+        if (!in_array($tpAmb, ['1', '2'], true)) {
+            $errors[] = 'tpAmb deve ser 1 (producao) ou 2 (homologacao).';
+        }
+
+        $dhEmi = (string)($dados['dhEmi'] ?? gmdate('Y-m-d\TH:i:s\Z'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+\-]\d{2}:\d{2})$/', $dhEmi)) {
+            $errors[] = 'dhEmi deve estar no formato UTC (YYYY-MM-DDThh:mm:ssZ ou com timezone).';
+        }
+
+        $verAplic = trim((string)($dados['verAplic'] ?? $this->config['ver_aplic'] ?? 'invoiceflow-1.0'));
+        if ($verAplic === '' || strlen($verAplic) > 20) {
+            $errors[] = 'verAplic deve ter entre 1 e 20 caracteres.';
+        }
+
+        $serie = $this->onlyDigits((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'));
+        if ($serie === '' || strlen($serie) > 5) {
+            $errors[] = 'serie deve conter de 1 a 5 dígitos numéricos.';
+        }
+
+        $nDps = $this->onlyDigits((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'));
+        if ($nDps === '' || strlen($nDps) > 15) {
+            $errors[] = 'nDPS deve conter de 1 a 15 dígitos numéricos.';
+        }
+
+        $tpEmit = (string)($dados['tpEmit'] ?? '1');
+        if (!in_array($tpEmit, ['1', '2', '3'], true)) {
+            $errors[] = 'tpEmit deve ser 1, 2 ou 3.';
+        }
+        if ($tpEmit !== '1') {
+            $errors[] = 'Nesta versão do emissor, somente tpEmit=1 (prestador) é permitido.';
+        }
+
+        $cLocEmi = $this->onlyDigits((string)($dados['cLocEmi'] ?? $dados['prestador']['codigoMunicipio'] ?? $this->getCodigoMunicipio()));
+        if (strlen($cLocEmi) !== 7) {
+            $errors[] = 'cLocEmi deve conter 7 dígitos.';
+        }
+
+        $cLocPrest = $this->onlyDigits((string)($dados['servico']['cLocPrestacao'] ?? $dados['servico']['codigo_municipio'] ?? $cLocEmi));
+        if (strlen($cLocPrest) !== 7) {
+            $errors[] = 'cLocPrestacao deve conter 7 dígitos.';
+        }
+
+        $cTribNac = $this->normalizeCTribNac((string)($dados['servico']['cTribNac'] ?? $dados['servico']['codigoServicoNacional'] ?? $dados['servico']['codigo'] ?? ''));
+        if (strlen($cTribNac) !== 6) {
+            $errors[] = 'cTribNac deve conter 6 dígitos.';
+        }
+
+        $desc = trim((string)($dados['servico']['descricao'] ?? $dados['servico']['discriminacao'] ?? ''));
+        if ($desc === '' || strlen($desc) > 1000) {
+            $errors[] = 'xDescServ é obrigatório.';
+        }
+
+        $valorServ = (float)($dados['valor_servicos'] ?? 0);
+        if ($valorServ <= 0) {
+            $errors[] = 'vServ deve ser maior que zero.';
+        }
+
+        $tribIssqn = (string)($dados['servico']['tribISSQN'] ?? '1');
+        if (!in_array($tribIssqn, ['1', '2', '3', '4'], true)) {
+            $errors[] = 'tribISSQN deve ser 1, 2, 3 ou 4.';
+        }
+
+        $tpRetIssqn = (string)($dados['servico']['tpRetISSQN'] ?? '1');
+        if (!in_array($tpRetIssqn, ['1', '2', '3'], true)) {
+            $errors[] = 'tpRetISSQN deve ser 1, 2 ou 3.';
+        }
+        if (in_array($tribIssqn, ['2', '3', '4'], true) && $tpRetIssqn !== '1') {
+            $errors[] = 'tpRetISSQN deve ser 1 quando tribISSQN for 2, 3 ou 4.';
+        }
+
+        $aliquota = (float)($dados['servico']['aliquota'] ?? 0);
+        if ($tribIssqn === '1' && $aliquota <= 0) {
+            $errors[] = 'pAliq (servico.aliquota) deve ser informado e maior que zero quando tribISSQN=1.';
+        }
+        if ($aliquota > 0) {
+            $aliquotaPercent = $this->normalizeDpsAliquotaPercent($aliquota);
+            if ($aliquotaPercent > 5) {
+                $errors[] = 'pAliq não pode ser superior a 5%.';
+            }
+            if (in_array($tribIssqn, ['2', '3', '4'], true)) {
+                $errors[] = 'pAliq não deve ser informado quando tribISSQN for 2, 3 ou 4.';
+            }
+        }
+
+        // Regra de consistência temporal do layout DPS.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dCompet) === 1 &&
+            preg_match('/^\d{4}-\d{2}-\d{2}T/', $dhEmi) === 1) {
+            $dhEmiDate = substr($dhEmi, 0, 10);
+            if ($dCompet > $dhEmiDate) {
+                $errors[] = 'dCompet não pode ser posterior à data de emissão (dhEmi).';
+            }
+        }
+
+        if (!empty($errors)) {
+            throw new \InvalidArgumentException('Layout DPS inválido: ' . implode(' | ', $errors));
+        }
+    }
+
+    private function enviarOperacao(string $operacao, string $xml): string
+    {
+        $path = $this->resolveOperationPath($operacao);
+        $gzipBase64 = base64_encode(gzencode($xml));
+        $response = '';
+
+        if ($operacao === 'emitir') {
+            $payload = json_encode(['dpsXmlGZipB64' => $gzipBase64], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($payload === false) {
+                throw new \RuntimeException('Falha ao serializar payload JSON da NFS-e.');
+            }
+            $response = $this->requestHttp('POST', $path, $payload, [
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ]);
+        } else {
+            $response = $this->requestHttp('POST', $path, $gzipBase64, [
+                'Content-Type: application/xml',
+                'Accept: application/xml',
+            ]);
+        }
 
         if ($response === '') {
             throw new \RuntimeException("Resposta vazia na operação {$operacao}");
@@ -389,38 +862,26 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $response;
     }
 
-    private function resolveOperationRequest(string $operacao, array $routeParams = []): array
+    private function resolveOperationPath(string $operacao): string
     {
         $defaultMap = [
-            'emitir' => 'adn:/nfse',
-            'consultar' => 'adn:/nfse/{id}',
-            'cancelar' => 'adn:/nfse/{id}/eventos',
-            'substituir' => 'adn:/nfse',
-            'consultar_rps' => 'adn:/nfse/consultar-rps',
-            'consultar_lote' => 'adn:/nfse/consultar-lote',
-            'baixar_xml' => 'adn:/nfse/download/xml',
-            'baixar_danfse' => 'danfse:/nfse/download/danfse',
-        ];
-        $defaultMethods = [
-            'emitir' => 'POST',
-            'consultar' => 'GET',
-            'cancelar' => 'POST',
-            'substituir' => 'POST',
-            'consultar_rps' => 'POST',
-            'consultar_lote' => 'POST',
-            'baixar_xml' => 'POST',
-            'baixar_danfse' => 'POST',
+            'emitir' => '/nfse/emitir',
+            'consultar' => '/nfse/consultar',
+            'cancelar' => '/nfse/cancelar',
+            'substituir' => '/nfse/substituir',
+            'consultar_rps' => '/nfse/consultar-rps',
+            'consultar_lote' => '/nfse/consultar-lote',
+            'baixar_xml' => '/nfse/download/xml',
+            'baixar_danfse' => '/nfse/download/danfse',
         ];
 
         $configured = $this->config['endpoints'][$operacao] ?? null;
-        $route = (string) ($configured ?? $defaultMap[$operacao] ?? '');
-        if ($route === '') {
+        $path = (string) ($configured ?? $defaultMap[$operacao] ?? '');
+        if ($path === '') {
             throw new \RuntimeException("Endpoint da operação {$operacao} não configurado");
         }
 
-        $route = $this->replaceRouteParams($route, $routeParams);
-        $method = strtoupper((string) ($this->config['operation_methods'][$operacao] ?? $defaultMethods[$operacao] ?? 'POST'));
-        return [$method, $this->resolveConfiguredRoute($route)];
+        return str_starts_with($path, '/') ? $path : '/' . $path;
     }
 
     private function requestHttp(string $method, string $path, ?string $body = null, array $headers = []): string
@@ -434,32 +895,82 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             return $result;
         }
 
-        $url = $this->buildRequestUrl($path);
+        $baseUrl = $this->normalizeBaseUrl((string)$this->getNationalApiBaseUrl());
+        $url = rtrim($baseUrl, '/') . $path;
         $authHeaders = $this->buildAuthHeaders();
         $allHeaders = array_merge($headers, $authHeaders);
+        $requestId = 'nfse_' . bin2hex(random_bytes(6));
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
+            $tempCertFile = null;
+            $tempKeyFile = null;
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => $this->getTimeout(),
+                CURLOPT_CONNECTTIMEOUT => min(30, max(5, $this->getTimeout())),
                 CURLOPT_CUSTOMREQUEST => $method,
                 CURLOPT_HTTPHEADER => $allHeaders,
+                CURLOPT_HEADER => true,
+                CURLOPT_DEFAULT_PROTOCOL => 'https',
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
             ]);
+            $urlParts = parse_url($url);
+            if (($urlParts['scheme'] ?? 'https') === 'https') {
+                curl_setopt($ch, CURLOPT_PORT, 443);
+            }
+            $this->applyMutualTlsCurlOptions($ch, $tempCertFile, $tempKeyFile);
             if ($body !== null) {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
             }
-            $response = curl_exec($ch);
+            $rawResponse = curl_exec($ch);
+            $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlErr = curl_error($ch);
             curl_close($ch);
+            if (is_string($tempCertFile) && $tempCertFile !== '' && file_exists($tempCertFile)) {
+                @unlink($tempCertFile);
+            }
+            if (is_string($tempKeyFile) && $tempKeyFile !== '' && file_exists($tempKeyFile)) {
+                @unlink($tempKeyFile);
+            }
 
-            if ($response === false) {
+            if ($rawResponse === false) {
+                $this->logHttpDebug([
+                    'request_id' => $requestId,
+                    'method' => $method,
+                    'url' => $url,
+                    'path' => $path,
+                    'status' => $status,
+                    'curl_error' => $curlErr,
+                    'headers' => $allHeaders,
+                    'request_body' => $this->truncate((string)$body, 1200),
+                    'response_headers' => null,
+                    'response_body' => null,
+                ]);
                 throw new \RuntimeException("Erro cURL: {$curlErr}");
             }
 
+            $responseHeaders = substr((string)$rawResponse, 0, $headerSize);
+            $response = substr((string)$rawResponse, $headerSize);
+            $this->logHttpDebug([
+                'request_id' => $requestId,
+                'method' => $method,
+                'url' => $url,
+                'path' => $path,
+                'status' => $status,
+                'curl_error' => $curlErr !== '' ? $curlErr : null,
+                'headers' => $allHeaders,
+                'request_body' => $this->truncate((string)$body, 1200),
+                'response_headers' => $this->truncate($responseHeaders, 1200),
+                'response_body' => $this->truncate((string)$response, 1200),
+            ]);
+
             if ($status >= 400) {
-                throw new \RuntimeException("HTTP {$status} na operação {$path}");
+                $snippet = substr(trim((string)$response), 0, 300);
+                $suffix = $snippet !== '' ? " | resposta: {$snippet}" : '';
+                throw new \RuntimeException("HTTP {$status} na operação {$path} [req:{$requestId}]{$suffix}");
             }
 
             return (string) $response;
@@ -474,30 +985,193 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             ],
         ]);
         $response = @file_get_contents($url, false, $context);
+        $this->logHttpDebug([
+            'request_id' => $requestId,
+            'method' => $method,
+            'url' => $url,
+            'path' => $path,
+            'status' => null,
+            'curl_error' => null,
+            'headers' => $allHeaders,
+            'request_body' => $this->truncate((string)$body, 1200),
+            'response_headers' => null,
+            'response_body' => $response !== false ? $this->truncate((string)$response, 1200) : null,
+        ]);
         if ($response === false) {
-            throw new \RuntimeException("Falha HTTP na operação {$path}");
+            throw new \RuntimeException("Falha HTTP na operação {$path} [req:{$requestId}]");
         }
 
         return (string) $response;
     }
 
-    private function requestJson(string $method, string $path, ?string $body = null): array
+    private function isHttpDebugEnabled(): bool
     {
-        $headers = [
-            'Accept: application/json',
-        ];
+        $configFlag = (bool)($this->config['debug_http'] ?? false);
+        $envRaw = $_ENV['FISCAL_NFSE_DEBUG'] ?? getenv('FISCAL_NFSE_DEBUG') ?: '';
+        $envFlag = in_array(strtolower((string)$envRaw), ['1', 'true', 'yes', 'on'], true);
+        return $configFlag || $envFlag;
+    }
 
-        if ($body !== null) {
-            $headers[] = 'Content-Type: application/json';
+    private function getHttpDebugLogPath(): string
+    {
+        $configured = (string)($this->config['debug_log_file'] ?? '');
+        if ($configured !== '') {
+            return $configured;
+        }
+        return sys_get_temp_dir() . '/nfse-http-debug.log';
+    }
+
+    private function logHttpDebug(array $data): void
+    {
+        if (!$this->isHttpDebugEnabled()) {
+            return;
         }
 
-        $raw = $this->requestHttp($method, $path, $body, $headers);
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            throw new \RuntimeException('Resposta JSON inválida do CNC');
+        $payload = [
+            'ts' => date('c'),
+            'provider' => 'NacionalProvider',
+            'ambiente' => $this->getAmbiente(),
+            'api_base' => $this->getNationalApiBaseUrl(),
+        ] + $data;
+
+        $line = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($line === false) {
+            return;
         }
 
-        return $decoded;
+        @file_put_contents($this->getHttpDebugLogPath(), $line . PHP_EOL, FILE_APPEND);
+    }
+
+    private function truncate(?string $value, int $limit): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (strlen($value) <= $limit) {
+            return $value;
+        }
+        return substr($value, 0, $limit) . '...<truncated>';
+    }
+
+    private function normalizeBaseUrl(string $baseUrl): string
+    {
+        $baseUrl = trim($baseUrl);
+        if ($baseUrl === '') {
+            throw new \RuntimeException('API base URL da NFSe Nacional não configurada.');
+        }
+
+        if (!preg_match('#^https?://#i', $baseUrl)) {
+            $baseUrl = 'https://' . ltrim($baseUrl, '/');
+        }
+
+        $parts = parse_url($baseUrl);
+        if ($parts === false || empty($parts['host'])) {
+            throw new \RuntimeException("API base URL inválida: {$baseUrl}");
+        }
+
+        $host = (string)$parts['host'];
+        $scheme = strtolower((string)($parts['scheme'] ?? 'https'));
+        if (str_ends_with($host, 'nfse.gov.br') && $scheme !== 'https') {
+            $scheme = 'https';
+        }
+        $path = (string)($parts['path'] ?? '');
+        $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        $port = isset($parts['port']) ? (int)$parts['port'] : $defaultPort;
+        $portSegment = $port !== $defaultPort ? ':' . $port : '';
+
+        return "{$scheme}://{$host}{$portSegment}" . rtrim($path, '/') . $query;
+    }
+
+    private function isAssocArray(array $value): bool
+    {
+        if ($value === []) {
+            return false;
+        }
+        return array_keys($value) !== range(0, count($value) - 1);
+    }
+
+    private function findFirstValueByPaths(array $data, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $data) && $data[$key] !== null) {
+                $value = trim((string)$data[$key]);
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+        return null;
+    }
+
+    private function extractAliquotaMunicipalFromCatalog(array $catalogData, string $cTribNac): ?float
+    {
+        if (isset($catalogData['aliquotas']) && is_array($catalogData['aliquotas'])) {
+            $aliquotas = $catalogData['aliquotas'];
+            foreach ($aliquotas as $serviceCode => $historico) {
+                $serviceCodeNorm = $this->onlyDigits((string)$serviceCode);
+                if ($serviceCodeNorm !== '' && $serviceCodeNorm !== $cTribNac) {
+                    continue;
+                }
+                if (!is_array($historico) || count($historico) === 0) {
+                    continue;
+                }
+                $last = end($historico);
+                if (is_array($last)) {
+                    $aliqRaw = $last['Aliq'] ?? $last['aliq'] ?? null;
+                    if ($aliqRaw !== null && is_numeric(str_replace(',', '.', (string)$aliqRaw))) {
+                        return (float)str_replace(',', '.', (string)$aliqRaw);
+                    }
+                }
+            }
+        }
+
+        $stack = [$catalogData];
+        while (!empty($stack)) {
+            $current = array_pop($stack);
+            if (!is_array($current)) {
+                continue;
+            }
+            if ($this->isAssocArray($current)) {
+                $code = $this->onlyDigits((string)($this->findFirstValueByPaths($current, [
+                    'cTribNac',
+                    'codigoServicoNacional',
+                    'codigo_servico_nacional',
+                    'codigo',
+                ]) ?? ''));
+                if ($code !== '' && $code === $cTribNac) {
+                    $aliqRaw = $this->findFirstValueByPaths($current, [
+                        'aliquota',
+                        'aliquotaIss',
+                        'aliquota_iss',
+                        'pAliq',
+                        'pAliquota',
+                    ]);
+                    if ($aliqRaw !== null && is_numeric(str_replace(',', '.', $aliqRaw))) {
+                        return (float)str_replace(',', '.', $aliqRaw);
+                    }
+                }
+            }
+            foreach ($current as $child) {
+                if (is_array($child)) {
+                    $stack[] = $child;
+                }
+            }
+        }
+        return null;
+    }
+
+    private function normalizeCompetenciaForParamApi(?string $date): string
+    {
+        $raw = trim((string)$date);
+        if ($raw === '') {
+            return gmdate('Y-m-d\TH:i:s\Z');
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) === 1) {
+            return $raw . 'T00:00:00Z';
+        }
+        return $raw;
     }
 
     private function buildAuthHeaders(): array
@@ -516,220 +1190,93 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $headers;
     }
 
-    private function resolveConfiguredRoute(string $route): string
+    private function applyMutualTlsCurlOptions($ch, ?string &$tempCertFile = null, ?string &$tempKeyFile = null): void
     {
-        if (preg_match('#^https?://#i', $route)) {
-            return $route;
+        $certManager = CertificateManager::getInstance();
+        $certificate = $certManager->getCertificate();
+        if ($certificate === null) {
+            return;
         }
 
-        if (preg_match('#^([a-z0-9_]+):(\/.*)$#i', $route, $matches)) {
-            $serviceBase = $this->resolveServiceBase($matches[1]);
-            if ($serviceBase !== '') {
-                return rtrim($serviceBase, '/') . $matches[2];
-            }
-
-            return $matches[2];
+        $certPem = (string)$certificate;
+        $keyPem = (string)$certificate->privateKey;
+        if ($certPem === '' || $keyPem === '') {
+            return;
         }
 
-        return str_starts_with($route, '/') ? $route : '/' . $route;
+        $tempCertFile = tempnam(sys_get_temp_dir(), 'nfse_cert_');
+        $tempKeyFile = tempnam(sys_get_temp_dir(), 'nfse_key_');
+        if (!is_string($tempCertFile) || !is_string($tempKeyFile)) {
+            return;
+        }
+
+        file_put_contents($tempCertFile, $certPem);
+        file_put_contents($tempKeyFile, $keyPem);
+        @chmod($tempCertFile, 0600);
+        @chmod($tempKeyFile, 0600);
+
+        curl_setopt($ch, CURLOPT_SSLCERT, $tempCertFile);
+        curl_setopt($ch, CURLOPT_SSLKEY, $tempKeyFile);
+        curl_setopt($ch, CURLOPT_SSLCERTTYPE, 'PEM');
+        curl_setopt($ch, CURLOPT_SSLKEYTYPE, 'PEM');
     }
 
-    private function resolveServiceBase(string $service): string
+    private function decodeGZipBase64(string $content): ?string
     {
-        $services = $this->config['services'] ?? [];
-        if (!is_array($services) || !isset($services[$service])) {
-            return '';
-        }
-
-        $serviceConfig = $services[$service];
-        if (is_string($serviceConfig) && $serviceConfig !== '') {
-            return rtrim($serviceConfig, '/');
-        }
-
-        if (is_array($serviceConfig)) {
-            $ambiente = $this->getAmbiente();
-            $byAmbiente = $serviceConfig[$ambiente] ?? null;
-            if (is_string($byAmbiente) && $byAmbiente !== '') {
-                return rtrim($byAmbiente, '/');
-            }
-        }
-
-        return '';
-    }
-
-    private function buildRequestUrl(string $path): string
-    {
-        if (preg_match('#^https?://#i', $path)) {
-            return $path;
-        }
-
-        $normalizedPath = str_starts_with($path, '/') ? $path : '/' . $path;
-        return rtrim($this->getNationalApiBaseUrl(), '/') . $normalizedPath;
-    }
-
-    private function replaceRouteParams(string $route, array $routeParams): string
-    {
-        foreach ($routeParams as $key => $value) {
-            $route = str_replace('{' . $key . '}', rawurlencode((string) $value), $route);
-            $route = str_replace('{' . $this->toSnake($key) . '}', rawurlencode((string) $value), $route);
-        }
-
-        return $route;
-    }
-
-    private function buildCncEndpoints(array $config): array
-    {
-        $endpoints = [
-            'contribuinte' => 'cnc:/contribuintes/{cpfCnpj}',
-            'habilitacao' => 'cnc:/contribuintes/{cpfCnpj}/habilitacao',
-        ];
-
-        if (is_array($config['cnc_endpoints'] ?? null)) {
-            foreach ($config['cnc_endpoints'] as $key => $route) {
-                if (!is_string($route) || $route === '') {
-                    continue;
-                }
-                $endpoints[$key] = $route;
-            }
-        }
-
-        $resolved = [];
-        foreach ($endpoints as $key => $route) {
-            $resolved[$key] = $this->resolveConfiguredRoute($route);
-        }
-
-        return $resolved;
-    }
-
-    private function resolveCncEndpoint(string $key, array $params): string
-    {
-        $route = $this->cncEndpoints[$key] ?? '';
-        if ($route === '') {
-            throw new \RuntimeException("Endpoint CNC '{$key}' não configurado");
-        }
-
-        $route = $this->replaceRouteParams($route, $params);
-        if (str_contains($route, '{codigoMunicipio}') || str_contains($route, '{codigo_municipio}')) {
-            return $route;
-        }
-
-        if (!empty($params['codigo_municipio'])) {
-            $separator = str_contains($route, '?') ? '&' : '?';
-            $route .= $separator . 'codigoMunicipio=' . rawurlencode((string) $params['codigo_municipio']);
-        }
-
-        return $route;
-    }
-
-    private function toSnake(string $value): string
-    {
-        $value = preg_replace('/[A-Z]/', '_$0', $value) ?? $value;
-        return strtolower(ltrim($value, '_'));
-    }
-
-    private function normalizeCpfCnpj(string $cpfCnpj): string
-    {
-        $digits = $this->onlyDigits($cpfCnpj);
-        if (!in_array(strlen($digits), [11, 14], true)) {
-            throw new \InvalidArgumentException('Documento deve ser CPF (11) ou CNPJ (14)');
-        }
-
-        return $digits;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private function extractHabilitado(array $payload, ?string $codigoMunicipio = null): bool
-    {
-        $candidate = $this->findFirstByKeys(
-            $payload,
-            ['habilitado', 'apto', 'ativo', 'podeEmitirNfse', 'pode_emitir_nfse', 'autorizado', 'status']
-        );
-
-        if (is_string($candidate)) {
-            $normalized = strtolower(trim($candidate));
-            if (in_array($normalized, ['habilitado', 'apto', 'ativo', 'autorizado', 'ok', 'regular', 'true', '1', 'sim'], true)) {
-                return true;
-            }
-            if (in_array($normalized, ['inabilitado', 'inapto', 'inativo', 'negado', 'false', '0', 'nao', 'não'], true)) {
-                return false;
-            }
-        }
-
-        if (is_bool($candidate)) {
-            return $candidate;
-        }
-
-        if (is_numeric($candidate)) {
-            return ((int) $candidate) === 1;
-        }
-
-        if ($codigoMunicipio !== null) {
-            $municipios = $this->findFirstByKeys($payload, ['municipios', 'convenios', 'convenio']);
-            if (is_array($municipios)) {
-                foreach ($municipios as $entry) {
-                    if (!is_array($entry)) {
-                        continue;
-                    }
-                    $cod = $this->findFirstByKeys($entry, ['codigoMunicipio', 'codigo_municipio', 'ibge']);
-                    if ((string) $cod === $codigoMunicipio) {
-                        $entryStatus = $this->findFirstByKeys($entry, ['habilitado', 'ativo', 'status', 'situacao']);
-                        return $this->extractHabilitado(['status' => $entryStatus]);
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private function extractSituacao(array $payload): ?string
-    {
-        $value = $this->findFirstByKeys($payload, ['situacao', 'status', 'descricaoStatus', 'descricao_status']);
-        if ($value === null) {
+        $content = trim($content);
+        if ($content === '') {
             return null;
         }
-
-        return is_scalar($value) ? (string) $value : null;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private function extractMotivo(array $payload): ?string
-    {
-        $value = $this->findFirstByKeys($payload, ['motivo', 'mensagem', 'descricao', 'xMotivo']);
-        if ($value === null) {
+        $decoded = base64_decode($content, true);
+        if ($decoded === false || $decoded === '') {
             return null;
         }
-
-        return is_scalar($value) ? (string) $value : null;
+        $xml = @gzdecode($decoded);
+        if ($xml === false) {
+            $xml = @gzinflate(substr($decoded, 10));
+        }
+        if ($xml === false) {
+            return null;
+        }
+        $xml = trim((string)$xml);
+        return $xml !== '' ? $xml : null;
     }
 
-    /**
-     * @param array<string,mixed> $payload
-     * @param array<int,string> $keys
-     * @return mixed
-     */
-    private function findFirstByKeys(array $payload, array $keys)
+    private function ensureUtf8XmlForTransmission(string $xml): string
     {
-        foreach ($payload as $key => $value) {
-            if (is_string($key) && in_array($key, $keys, true)) {
-                return $value;
+        $xml = ltrim($xml);
+        $xml = preg_replace('/^\xEF\xBB\xBF/', '', $xml) ?? $xml;
+
+        if (preg_match('//u', $xml) !== 1) {
+            if (function_exists('mb_convert_encoding')) {
+                $converted = @mb_convert_encoding($xml, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+                if (is_string($converted) && $converted !== '') {
+                    $xml = $converted;
+                }
             }
-            if (is_array($value)) {
-                $nested = $this->findFirstByKeys($value, $keys);
-                if ($nested !== null) {
-                    return $nested;
+            if (preg_match('//u', $xml) !== 1 && function_exists('iconv')) {
+                $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $xml);
+                if (is_string($converted) && $converted !== '') {
+                    $xml = $converted;
                 }
             }
         }
 
-        return null;
+        if (function_exists('iconv')) {
+            $cleaned = @iconv('UTF-8', 'UTF-8//IGNORE', $xml);
+            if (is_string($cleaned) && $cleaned !== '') {
+                $xml = $cleaned;
+            }
+        }
+
+        $xml = preg_replace('/^\s*<\?xml[^>]*\?>\s*/', '', $xml) ?? $xml;
+        $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . trim($xml);
+
+        if (preg_match('//u', $xml) !== 1) {
+            throw new \RuntimeException('XML gerado não pôde ser normalizado para UTF-8 antes do envio.');
+        }
+
+        return $xml;
     }
 
     private function buildConsultaXml(string $chave): string
@@ -837,10 +1384,108 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
     {
         $node = $dom->createElementNS($this->getIntegrationNamespace(), $name);
         if ($value !== null) {
-            $node->nodeValue = $value;
+            $normalizedValue = $this->normalizeXmlText($value);
+            $node->appendChild($dom->createTextNode($normalizedValue));
         }
         $parent->appendChild($node);
         return $node;
+    }
+
+    private function appendNodeNoNs(\DOMDocument $dom, \DOMElement $parent, string $name, ?string $value = null): \DOMElement
+    {
+        $node = $dom->createElement($name);
+        if ($value !== null && $value !== '') {
+            $normalizedValue = $this->normalizeXmlText($value);
+            $node->appendChild($dom->createTextNode($normalizedValue));
+        }
+        $parent->appendChild($node);
+        return $node;
+    }
+
+    private function buildDpsId(array $dados, ?string $serie = null, ?string $nDps = null): string
+    {
+        $cLoc = str_pad(substr($this->onlyDigits((string)($dados['prestador']['codigoMunicipio'] ?? $this->getCodigoMunicipio())), 0, 7), 7, '0', STR_PAD_LEFT);
+        $doc = $this->onlyDigits((string)($dados['prestador']['cnpj'] ?? ''));
+        $tpInsc = strlen($doc) === 14 ? '2' : '1';
+        $insc = strlen($doc) === 14
+            ? $doc
+            : str_pad(substr($doc, 0, 11), 14, '0', STR_PAD_LEFT);
+        $serie = $serie !== null
+            ? $this->normalizeNumeric($serie, 5, '1')
+            : $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'), 5, '1');
+        $numero = $nDps !== null
+            ? $this->normalizeNumeric($nDps, 15, '1')
+            : $this->normalizeNumeric((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'), 15, '1');
+
+        return 'DPS' . $cLoc . $tpInsc . $insc . $serie . $numero;
+    }
+
+    private function normalizeNumeric(string $value, int $length, string $default): string
+    {
+        $digits = $this->onlyDigits($value);
+        if ($digits === '') {
+            $digits = $default;
+        }
+        return str_pad(substr($digits, 0, $length), $length, '0', STR_PAD_LEFT);
+    }
+
+    private function normalizeCTribNac(string $raw): string
+    {
+        $digits = $this->onlyDigits($raw);
+        if ($digits === '') {
+            return '';
+        }
+
+        if (strlen($digits) === 6) {
+            return $digits;
+        }
+
+        // Aceita entradas no formato item/subitem sem desdobro e assume desdobro 01.
+        // Ex.: "107" -> 01.07.01 => 010701 | "1705" -> 17.05.01 => 170501
+        if (strlen($digits) === 3) {
+            $item = (int)substr($digits, 0, 1);
+            $subitem = (int)substr($digits, 1, 2);
+            return sprintf('%02d%02d01', $item, $subitem);
+        }
+        if (strlen($digits) === 4) {
+            $item = (int)substr($digits, 0, 2);
+            $subitem = (int)substr($digits, 2, 2);
+            return sprintf('%02d%02d01', $item, $subitem);
+        }
+
+        return str_pad(substr($digits, 0, 6), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function normalizeXmlText(string $value): string
+    {
+        if (preg_match('//u', $value) !== 1) {
+            if (function_exists('mb_convert_encoding')) {
+                $converted = @mb_convert_encoding($value, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+                if (is_string($converted) && $converted !== '') {
+                    $value = $converted;
+                }
+            }
+
+            if (preg_match('//u', $value) !== 1 && function_exists('iconv')) {
+                $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
+                if (is_string($converted) && $converted !== '') {
+                    $value = $converted;
+                }
+            }
+
+            if (preg_match('//u', $value) !== 1 && function_exists('utf8_encode')) {
+                $value = utf8_encode($value);
+            }
+        }
+
+        if (function_exists('iconv')) {
+            $cleaned = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+            if (is_string($cleaned) && $cleaned !== '') {
+                $value = $cleaned;
+            }
+        }
+
+        return preg_replace('/[^\P{C}\t\n\r]/u', '', $value) ?? $value;
     }
 
     /**
@@ -866,6 +1511,20 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return number_format($value, $decimals, '.', '');
     }
 
+    private function normalizeDpsAliquotaPercent(float $aliquota): float
+    {
+        if ($aliquota <= 0) {
+            return 0.0;
+        }
+
+        // Payload interno costuma trafegar fracao (0.02 = 2%). No layout DPS nacional, pAliq eh percentual.
+        if ($aliquota > 0 && $aliquota <= 1) {
+            return $aliquota * 100;
+        }
+
+        return $aliquota;
+    }
+
     private function assinarXmlSeNecessario(string $xml): string
     {
         $signatureMode = (string) ($this->config['signature_mode'] ?? 'optional');
@@ -883,11 +1542,12 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         try {
+            [$signTag, $signAttr] = $this->resolveSignatureTarget($xml);
             return Signer::sign(
                 $certificate,
                 $xml,
-                'InfDeclaracaoPrestacaoServico',
-                'Id',
+                $signTag,
+                $signAttr,
                 OPENSSL_ALGO_SHA256
             );
         } catch (\Throwable $e) {
@@ -896,5 +1556,29 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             }
             return $xml;
         }
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function resolveSignatureTarget(string $xml): array
+    {
+        $dom = new \DOMDocument();
+        if (!@$dom->loadXML($xml)) {
+            return ['InfDeclaracaoPrestacaoServico', 'Id'];
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $legacy = $xpath->query("//*[local-name()='InfDeclaracaoPrestacaoServico']");
+        if ($legacy && $legacy->length > 0) {
+            return ['InfDeclaracaoPrestacaoServico', 'Id'];
+        }
+
+        $dps = $xpath->query("//*[local-name()='infDPS']");
+        if ($dps && $dps->length > 0) {
+            return ['infDPS', 'id'];
+        }
+
+        return ['InfDeclaracaoPrestacaoServico', 'Id'];
     }
 }

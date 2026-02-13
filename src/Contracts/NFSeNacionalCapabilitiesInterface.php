@@ -27,19 +27,44 @@ interface NFSeNacionalCapabilitiesInterface
     /**
      * @return array{data: array, metadata?: array}
      */
-    public function consultarAliquotasMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array;
+    public function consultarAliquotasMunicipio(
+        string $codigoMunicipio,
+        ?string $codigoServico = null,
+        ?string $competencia = null,
+        bool $forceRefresh = false
+    ): array;
 
     /**
-     * Consulta dados cadastrais do contribuinte no CNC.
-     *
-     * @return array<string,mixed>
+     * @return array{data: array, metadata?: array}
      */
-    public function consultarContribuinteCnc(string $cpfCnpj): array;
+    public function consultarConvenioMunicipio(string $codigoMunicipio, bool $forceRefresh = false): array;
 
     /**
-     * Verifica se o contribuinte está habilitado para emissão NFSe Nacional.
+     * Valida o layout DPS nacional e, opcionalmente, consulta catálogo municipal.
      *
-     * @return array<string,mixed>
+     * @return array{
+     *   valid: bool,
+     *   errors: array<int, string>,
+     *   warnings: array<int, string>,
+     *   catalog: array<string, mixed>|null
+     * }
      */
-    public function verificarHabilitacaoCnc(string $cpfCnpj, ?string $codigoMunicipio = null): array;
+    public function validarLayoutDps(array $payload, bool $checkCatalog = true): array;
+
+    /**
+     * Gera XML DPS para preview sem transmissão.
+     */
+    public function gerarXmlDpsPreview(array $payload): ?string;
+
+    /**
+     * Gera e valida estruturalmente o XML DPS antes do envio.
+     *
+     * @return array{
+     *   valid: bool,
+     *   xml: string|null,
+     *   errors: array<int, string>,
+     *   missingTags: array<int, array{tag: string, xpath: string}>
+     * }
+     */
+    public function validarXmlDps(array $payload): array;
 }
