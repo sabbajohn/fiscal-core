@@ -8,6 +8,7 @@ use freeline\FiscalCore\Exceptions\CertificateException;
 use freeline\FiscalCore\Exceptions\SefazException;
 use freeline\FiscalCore\Exceptions\ValidationException;
 use freeline\FiscalCore\Exceptions\XmlException;
+use freeline\FiscalCore\Support\XmlUtils;
 
 /**
  * Handler centralizado para tratamento de exceções e responses
@@ -429,66 +430,9 @@ class ResponseHandler
      *   status: string
      * }
      */
-    public function parseSefazRetorno(string $xml): array
+    public static function parseSefazRetorno(string $xml): array
     {
-        $fallback = [
-            'lote' => null,
-            'protocolo' => null,
-            'autorizado' => false,
-            'status' => 'desconhecido',
-        ];
-
-        if ($xml === '') {
-            return $fallback;
-        }
-
-        $dom = new \DOMDocument();
-        libxml_use_internal_errors(true);
-        if (!$dom->loadXML($xml)) {
-            libxml_clear_errors();
-            return $fallback;
-        }
-        libxml_clear_errors();
-
-        $xpath = new \DOMXPath($dom);
-
-        $retEnviNodes = $xpath->query("//*[local-name()='retEnviNFe']");
-        $retEnvi = ($retEnviNodes && $retEnviNodes->length > 0) ? $retEnviNodes->item(0) : null;
-
-        $lote = null;
-        if ($retEnvi instanceof \DOMNode) {
-            $lote = [
-                'cStat' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'cStat'),
-                'xMotivo' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'xMotivo'),
-                'cUF' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'cUF'),
-                'dhRecbto' => $this->firstChildTextByLocalName($xpath, $retEnvi, 'dhRecbto'),
-            ];
-        }
-
-        $infProtNodes = $xpath->query("//*[local-name()='infProt']");
-        $infProt = ($infProtNodes && $infProtNodes->length > 0) ? $infProtNodes->item(0) : null;
-
-        $protocolo = null;
-        if ($infProt instanceof \DOMNode) {
-            $protocolo = [
-                'cStat' => $this->firstChildTextByLocalName($xpath, $infProt, 'cStat'),
-                'xMotivo' => $this->firstChildTextByLocalName($xpath, $infProt, 'xMotivo'),
-                'chNFe' => $this->firstChildTextByLocalName($xpath, $infProt, 'chNFe'),
-                'nProt' => $this->firstChildTextByLocalName($xpath, $infProt, 'nProt'),
-                'dhRecbto' => $this->firstChildTextByLocalName($xpath, $infProt, 'dhRecbto'),
-            ];
-        }
-
-        $protStat = (string) ($protocolo['cStat'] ?? '');
-        $autorizado = in_array($protStat, ['100', '150'], true);
-        $status = $autorizado ? 'autorizada' : ($protStat !== '' ? 'rejeitada' : 'processada');
-
-        return [
-            'lote' => $lote,
-            'protocolo' => $protocolo,
-            'autorizado' => $autorizado,
-            'status' => $status,
-        ];
+        return XmlUtils::parseSefazRetorno($xml);
     }
 
     /**
@@ -496,7 +440,7 @@ class ResponseHandler
      */
     public function parseSefazRetornoAsJson(string $xml): string
     {
-        return json_encode($this->parseSefazRetorno($xml), JSON_UNESCAPED_UNICODE);
+        return XmlUtils::parseSefazRetornoAsJson($xml);
     }
 
     /**
@@ -662,14 +606,16 @@ class ResponseHandler
         }
     }
 
-    private function firstChildTextByLocalName(\DOMXPath $xpath, \DOMNode $contextNode, string $localName): ?string
+    /**
+     * Converte XML em array associativo no formato chave => valor.
+     *
+     * Exemplo de chave: "retDistDFeInt.cStat"
+     * Nós repetidos viram array no mesmo índice.
+     *
+     * @return array<string, mixed>
+     */
+    public static function xmlToKeyValueArray(string $xml): array
     {
-        $nodes = $xpath->query("./*[local-name()='{$localName}']", $contextNode);
-        if (!$nodes || $nodes->length === 0) {
-            return null;
-        }
-
-        $value = trim((string) $nodes->item(0)?->textContent);
-        return $value === '' ? null : $value;
+        return XmlUtils::xmlToKeyValueArray($xml);
     }
 }

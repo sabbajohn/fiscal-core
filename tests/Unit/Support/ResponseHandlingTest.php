@@ -203,7 +203,7 @@ class ResponseHandlingTest extends TestCase
     public function deve_normalizar_retorno_sefaz_xml_invalido_com_fallback(): void
     {
         $handler = new ResponseHandler();
-        $parsed = $handler->parseSefazRetorno('<xml-invalido');
+        $parsed = ResponseHandler::parseSefazRetorno('<xml-invalido');
 
         $this->assertSame([
             'lote' => null,
@@ -238,11 +238,87 @@ class ResponseHandlingTest extends TestCase
 </nfeProc>
 XML;
 
-        $parsed = $handler->parseSefazRetorno($xml);
+        $parsed = ResponseHandler::parseSefazRetorno($xml);
 
         $this->assertSame('103', $parsed['lote']['cStat']);
         $this->assertSame('100', $parsed['protocolo']['cStat']);
         $this->assertTrue($parsed['autorizado']);
         $this->assertSame('autorizada', $parsed['status']);
+    }
+
+    /** @test */
+    public function deve_converter_xml_para_array_chave_valor(): void
+    {
+        $handler = new ResponseHandler();
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<retDistDFeInt versao="1.01">
+    <cStat>138</cStat>
+    <xMotivo>Documento localizado</xMotivo>
+    <loteDistDFeInt>
+        <docZip NSU="000000000000001">ABC</docZip>
+    </loteDistDFeInt>
+</retDistDFeInt>
+XML;
+
+        $result = ResponseHandler::xmlToKeyValueArray($xml);
+
+        $this->assertSame('138', $result['cStat']);
+        $this->assertSame('Documento localizado', $result['xMotivo']);
+        $this->assertSame('000000000000001', $result['loteDistDFeInt.docZip.@NSU']);
+        $this->assertSame('ABC', $result['loteDistDFeInt.docZip']);
+    }
+
+    /** @test */
+    public function deve_agrupar_nos_repetidos_na_conversao_xml_para_array(): void
+    {
+        $handler = new ResponseHandler();
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+    <item>
+        <chNFe>111</chNFe>
+    </item>
+    <item>
+        <chNFe>222</chNFe>
+    </item>
+</root>
+XML;
+
+        $result = ResponseHandler::xmlToKeyValueArray($xml);
+
+        $this->assertSame(['111', '222'], $result['item.chNFe']);
+    }
+
+    /** @test */
+    public function deve_normalizar_retorno_distdfe_soap_com_consumo_indevido(): void
+    {
+        $xml = <<<XML
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
+    <soap:Body>
+        <nfeDistDFeInteresseResponse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+            <nfeDistDFeInteresseResult>
+                <retDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01">
+                    <tpAmb>2</tpAmb>
+                    <verAplic>1.7.6</verAplic>
+                    <cStat>656</cStat>
+                    <xMotivo>Rejeicao: Consumo Indevido</xMotivo>
+                    <dhResp>2026-02-13T14:05:17-03:00</dhResp>
+                    <ultNSU>000000000000000</ultNSU>
+                    <maxNSU>000000000000000</maxNSU>
+                </retDistDFeInt>
+            </nfeDistDFeInteresseResult>
+        </nfeDistDFeInteresseResponse>
+    </soap:Body>
+</soap:Envelope>
+XML;
+
+        $parsed = ResponseHandler::parseSefazRetorno($xml);
+
+        $this->assertSame('656', $parsed['lote']['cStat']);
+        $this->assertSame('Rejeicao: Consumo Indevido', $parsed['lote']['xMotivo']);
+        $this->assertFalse($parsed['autorizado']);
+        $this->assertSame('rejeitada', $parsed['status']);
     }
 }

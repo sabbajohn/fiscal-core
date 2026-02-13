@@ -85,6 +85,14 @@ class NFeAdapter implements NotaFiscalInterface
         return $this->tools->sefazInutiliza($serie, $numeroInicial, $numeroFinal, $justificativa, null, $ano2Digitos);
     }
 
+    /**
+     * Consulta notas emitidas para estabelecimento(Notas de entrada)
+     * @param int $ultimoNsu
+     * @param int $numNSU
+     * @param string|null $chave
+     * @param string $fonte
+     * @return string
+     */
     public function consultaNotasEmitidasParaEstabelecimento(int $ultimoNsu=0, int $numNSU=0, ?string $chave=null, string $fonte='AN'): string
     {
         return $this->tools->sefazDistDFe($ultimoNsu, $numNSU, $chave, $fonte);

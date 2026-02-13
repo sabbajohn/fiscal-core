@@ -25,7 +25,8 @@
 
   },
   "require-dev": {
-    "phpunit/phpunit": "^10.0"
+    "phpunit/phpunit": "^10.0",
+    "phpstan/phpstan-phpunit": "^2.0"
   },
   "suggest": {
     "nfephp-org/sped-nfse": "Driver NFSe baseado no ecossistema nfephp-org (instale se for usar NFSe com este provider)",

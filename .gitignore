@@ -21,3 +21,5 @@ files/*
 
 .vscode/settings.json
 .phpunit.cache/test-results
+tests/logs/testdox.txt
+tests/logs/testdox.html
