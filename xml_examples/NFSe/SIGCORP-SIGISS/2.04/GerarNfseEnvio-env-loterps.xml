@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GerarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">
+	<Rps>
+		<InfDeclaracaoPrestacaoServico>
+			<Rps>
+				<IdentificacaoRps>
+					<Numero>1</Numero>
+					<Serie>1</Serie>
+					<Tipo>1</Tipo>
+				</IdentificacaoRps>
+				<DataEmissao>2022-09-06</DataEmissao>
+				<Status>1</Status>
+			</Rps>
+			<Competencia>2022-09-06</Competencia>
+			<Servico>
+				<Valores>
+					<ValorServicos>4.20</ValorServicos>
+					<ValorDeducoes>0</ValorDeducoes>
+					<ValorPis>0</ValorPis>
+					<ValorCofins>0</ValorCofins>
+					<ValorInss>0</ValorInss>
+					<ValorIr>0</ValorIr>
+					<ValorCsll>0</ValorCsll>
+					<OutrasRetencoes>0</OutrasRetencoes>
+					<ValTotTributos>0</ValTotTributos>
+					<ValorIss>0</ValorIss>
+					<Aliquota>2.7</Aliquota>
+					<DescontoIncondicionado>0</DescontoIncondicionado>
+					<DescontoCondicionado>0</DescontoCondicionado>
+				</Valores>
+				<IssRetido>1</IssRetido>
+				<ResponsavelRetencao>1</ResponsavelRetencao>
+				<ItemListaServico>01.01</ItemListaServico>
+				<CodigoCnae>1234567</CodigoCnae>
+				<Discriminacao>sdasdadasda ajksdb asjkdbab skdba ksdb</Discriminacao>
+				<CodigoMunicipio>2925808</CodigoMunicipio>
+				<CodigoPais>2373</CodigoPais>
+				<ExigibilidadeISS>1</ExigibilidadeISS>
+				<MunicipioIncidencia>2925808</MunicipioIncidencia>
+				<!-- Campo: cNBS -->
+				<cNBS>123456789</cNBS>
+			</Servico>
+
+			<Prestador>
+				<CpfCnpj>
+					<Cnpj>99999999999999</Cnpj>
+				</CpfCnpj>
+				<InscricaoMunicipal>99999</InscricaoMunicipal>
+			</Prestador>
+			<TomadorServico>
+				<IdentificacaoTomador>
+					<CpfCnpj>
+						<Cnpj>99999999999999</Cnpj>
+					</CpfCnpj>
+				</IdentificacaoTomador>
+				<RazaoSocial>TESTE 0004</RazaoSocial>
+				<Endereco>
+					<Endereco>xxxxxxxxxxxxxx</Endereco>
+					<Numero>50</Numero>
+					<Complemento>Casa</Complemento>
+					<Bairro>xxxxxxxxxxxxxxxx</Bairro>
+					<CodigoMunicipio>3554508</CodigoMunicipio>
+					<Uf>SP</Uf>
+					<Cep>12345678</Cep>
+				</Endereco>
+				<Contato>
+					<Telefone>75 9 9999-9999</Telefone>
+					<Email>tomador@teste.com</Email>
+				</Contato>
+			</TomadorServico>
+			<RegimeEspecialTributacao>1</RegimeEspecialTributacao>
+			<OptanteSimplesNacional>1</OptanteSimplesNacional>
+			<IncentivoFiscal>1</IncentivoFiscal>
+			<InformacoesComplementares>Informação Complementar Solicitada</InformacoesComplementares>
+			<!-- Grupo: IBSCBS -->
+			<IBSCBS>
+				<cLocalidadeIncid>2925808</cLocalidadeIncid>
+				<xLocalidadeIncid>Nome do Municipio Exemplo</xLocalidadeIncid>
+				<valores>
+					<vBC>4.20</vBC>
+					<uf>
+						<pIBSUF>1.00</pIBSUF>
+						<pAliqEfetUF>1.00</pAliqEfetUF>
+					</uf>
+					<mun>
+						<pIBSMun>1.00</pIBSMun>
+						<pAliqEfetMun>1.00</pAliqEfetMun>
+					</mun>
+					<fed>
+						<pCBS>1.00</pCBS>
+						<pAliqEfetCBS>1.00</pAliqEfetCBS>
+					</fed>
+				</valores>
+				<totCIBS>
+					<vTotNF>4.32</vTotNF>
+					<gIBS>
+						<vIBSTot>0.08</vIBSTot>
+						<gIBSUFTot>
+							<vIBSUF>0.04</vIBSUF>
+						</gIBSUFTot>
+						<gIBSMunTot>
+							<vIBSMun>0.04</vIBSMun>
+						</gIBSMunTot>
+					</gIBS>
+					<gCBS>
+						<vCBS>0.04</vCBS>
+					</gCBS>
+				</totCIBS>
+			</IBSCBS>
+			<!-- Fim do Grupo: IBSCBS -->
+		</InfDeclaracaoPrestacaoServico>
+	</Rps>
+</GerarNfseEnvio>

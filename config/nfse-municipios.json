@@ -1,18 +1,18 @@
 {
-  "_comment": "Configuração de providers NFSe nacional",
-  "_instructions": "NFSe é resolvida pelo provider nacional. Chaves municipais abaixo são aliases legados.",
+  "_comment": "Configuração de providers NFSe",
+  "_instructions": "NFSe é resolvida por município quando configurado. Chaves municipais abaixo podem ser aliases.",
   "nfse_nacional": {
     "_comment": "Provedor Nacional - Modelo NFSe Nacional",
     "provider": "NacionalProvider",
     "provider_class": "NacionalProvider",
     "xml_namespace": "http://www.publica.inf.br/integracao_nfse",
     "codigo_municipio": "0000000",
-    "api_base_url": "https://adn.producaorestrita.nfse.gov.br/api/v1",
+    "api_base_url": "",
     "wsdl": "https://adn.producaorestrita.nfse.gov.br/docs/index.html",
     "wsdl_homologacao": "https://adn.producaorestrita.nfse.gov.br/docs/index.html",
     "wsdl_producao": "https://adn.nfse.gov.br/docs/index.html",
-    "url_homologacao": "https://adn.producaorestrita.nfse.gov.br/api/v1",
-    "url_producao": "https://adn.nfse.gov.br/api/v1",
+    "url_homologacao": "http://sefin.producaorestrita.nfse.gov.br/SefinNacional/",
+    "url_producao": "http://sefin.nfse.gov.br/SefinNacional/",
     "timeout": 30,
     "cache_ttl": 86400,
     "signature_mode": "required",
@@ -54,7 +54,7 @@
         "producao": "https://adn.nfse.gov.br/danfse"
       },
       "sefin": {
-        "homologacao": "https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional",
+        "homologacao": "http://sefin.producaorestrita.nfse.gov.br/SefinNacional",
         "producao": "https://sefin.nfse.gov.br/SefinNacional"
       }
     },
@@ -91,9 +91,46 @@
     "backend": "http",
     "ambiente": "homologacao"
   },
+  "4209102": {
+    "_comment": "Joinville/SC - PUBLICA",
+    "provider": "PublicaProvider",
+    "provider_class": "PublicaProvider",
+    "codigo_municipio": "4209102",
+    "wsdl": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_homologacao": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_producao": "https://nfse.joinville.sc.gov.br/ws/nfse.asmx?wsdl",
+    "aliquota_format": "decimal",
+    "versao": "3.00",
+    "ambiente": "homologacao"
+  },
+  "1501402": {
+    "_comment": "Belém/PA - DSF (configure WSDL correto do município)",
+    "provider": "DsfProvider",
+    "provider_class": "DsfProvider",
+    "codigo_municipio": "1501402",
+    "codigo_siafi": "0427",
+    "wsdl": "",
+    "wsdl_homologacao": "",
+    "wsdl_producao": "",
+    "aliquota_format": "decimal",
+    "versao": "2.04",
+    "ambiente": "homologacao"
+  },
+  "4106902": {
+    "_comment": "Curitiba/PR - EGOVERNE",
+    "provider": "EgoverneProvider",
+    "provider_class": "EgoverneProvider",
+    "codigo_municipio": "4106902",
+    "wsdl": "https://nfse.curitiba.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_homologacao": "https://nfse.curitiba.pr.gov.br/ws/nfse.asmx?wsdl",
+    "wsdl_producao": "https://nfse.curitiba.pr.gov.br/ws/nfse.asmx?wsdl",
+    "aliquota_format": "decimal",
+    "versao": "1.00",
+    "ambiente": "homologacao"
+  },
   "curitiba": {
-    "_comment": "Alias legado - roteia para NFSe nacional",
-    "alias_of": "nfse_nacional",
+    "_comment": "Alias legado - roteia para EGOVERNE",
+    "alias_of": "4106902",
     "legacy": true
   },
   "campo_largo": {
@@ -102,8 +139,13 @@
     "legacy": true
   },
   "joinville": {
-    "_comment": "Alias legado - roteia para NFSe nacional",
-    "alias_of": "nfse_nacional",
+    "_comment": "Alias legado - roteia para PUBLICA",
+    "alias_of": "4209102",
+    "legacy": true
+  },
+  "belem": {
+    "_comment": "Alias legado - roteia para DSF",
+    "alias_of": "1501402",
     "legacy": true
   },
   "sao_jose_dos_pinhais": {

@@ -40,7 +40,7 @@ class NFSeFacade
                 $registry = ProviderRegistry::getInstance();
                 if (!$registry->has($this->providerKey)) {
                     $this->initializationError = FiscalResponse::error(
-                        "Provider NFSe nacional '{$this->providerKey}' não encontrado",
+                        "Provider NFSe '{$this->providerKey}' não encontrado",
                         'PROVIDER_NOT_FOUND',
                         'nfse_initialization',
                         [
@@ -51,7 +51,6 @@ class NFSeFacade
                             'warnings' => $this->deprecationWarnings,
                             'suggestions' => [
                                 "Configure '{$this->providerKey}' em config/nfse-municipios.json",
-                                "O parâmetro 'municipio' foi deprecado para NFSe e não define roteamento",
                             ]
                         ]
                     );

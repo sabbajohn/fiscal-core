@@ -33,7 +33,7 @@ class NFSeAdapter implements NotaServicoInterface
         }
 
         $registry = ProviderRegistry::getInstance();
-        $this->provider = $registry->getNfseNacional();
+        $this->provider = $registry->get($this->providerKey);
     }
 
     /**

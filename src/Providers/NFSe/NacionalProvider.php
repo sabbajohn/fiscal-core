@@ -12,6 +12,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 {
     private NacionalCatalogService $catalogService;
     private $httpClient;
+    private ?string $xmlNamespace = null;
 
     public function __construct(array $config)
     {
@@ -436,16 +437,25 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
     {
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->formatOutput = false;
+        $this->xmlNamespace = null;
 
-        $serie = $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'), 5, '1');
-        $nDps = $this->normalizeNumeric((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'), 15, '1');
+        $tpEmit = (string)($dados['tpEmit'] ?? '1');
+        $serieDefault = $tpEmit === '1' ? '900' : '1';
+        $serie = $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? $serieDefault), 5, $serieDefault);
+        $nDpsRaw = (string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1');
+        $nDps = $this->onlyDigits($nDpsRaw);
+        if ($nDps === '') {
+            $nDps = '1';
+        }
+        if (strlen($nDps) > 9) {
+            $nDps = substr($nDps, -9);
+        }
         $dCompet = (string)($dados['dCompet'] ?? date('Y-m-d'));
         $tpAmb = (string)($dados['tpAmb'] ?? ($this->getAmbiente() === 'producao' ? '1' : '2'));
         $dhEmi = (string)($dados['dhEmi'] ?? gmdate('Y-m-d\TH:i:s\Z'));
         $verAplic = (string)($dados['verAplic'] ?? $this->config['ver_aplic'] ?? 'invoiceflow-1.0');
-        $tpEmit = (string)($dados['tpEmit'] ?? '1');
 
-        $versao = (string)($this->config['dps_versao'] ?? '1.00');
+        $versao = (string)($this->config['dps_versao'] ?? '1.01');
         $dpsId = $this->buildDpsId($dados, $serie, $nDps);
         $wrapInNfse = $this->shouldWrapDpsInNfse();
 
@@ -455,7 +465,8 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             $dom->appendChild($root);
 
             $infNfse = $dom->createElement('infNFSe');
-            $nfseId = (string)($dados['nfse']['id'] ?? $dados['nfse_id'] ?? ('NFSe' . substr($dpsId, 3)));
+            $nfseIdSuffix = substr($dpsId, 3);
+            $nfseId = (string)($dados['nfse']['id'] ?? $dados['nfse_id'] ?? ('NFSe' . $nfseIdSuffix));
             if ($nfseId !== '') {
                 $infNfse->setAttribute('Id', $nfseId);
             }
@@ -465,15 +476,15 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             $dps->setAttribute('versao', $versao);
             $infNfse->appendChild($dps);
         } else {
-            $dps = $dom->createElement('DPS');
+            $this->xmlNamespace = 'http://www.sped.fazenda.gov.br/nfse';
+            $dps = $dom->createElementNS($this->xmlNamespace, 'DPS');
             $dps->setAttribute('versao', $versao);
             $dom->appendChild($dps);
         }
 
-        $inf = $dom->createElement('infDPS');
+        $inf = $this->createElementWithNs($dom, 'infDPS');
         $inf->setAttribute('Id', $dpsId);
         $dps->appendChild($inf);
-        $this->appendNodeNoNs($dom, $inf, 'id', $dpsId);
 
         $this->appendNodeNoNs($dom, $inf, 'tpAmb', $tpAmb);
         $this->appendNodeNoNs($dom, $inf, 'dhEmi', $dhEmi);
@@ -487,7 +498,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         $cLocEmi = str_pad(substr($this->onlyDigits($cLocEmiInput), 0, 7), 7, '0', STR_PAD_LEFT);
         $this->appendNodeNoNs($dom, $inf, 'cLocEmi', $cLocEmi);
 
-        $prest = $dom->createElement('prest');
+        $prest = $this->createElementWithNs($dom, 'prest');
         $inf->appendChild($prest);
         $prestDoc = $this->onlyDigits((string)($dados['prestador']['cnpj'] ?? ''));
         if (strlen($prestDoc) === 14) {
@@ -495,7 +506,10 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         } else {
             $this->appendNodeNoNs($dom, $prest, 'CPF', str_pad(substr($prestDoc, 0, 11), 11, '0', STR_PAD_LEFT));
         }
-        $prestIm = trim((string)($dados['prestador']['inscricaoMunicipal'] ?? ''));
+        $prestIm = trim((string)($dados['prestador']['inscricaoMunicipal'] ?? $dados['prestador']['im'] ?? ''));
+        if ($prestIm === '' && (bool)($this->config['dps_require_im'] ?? false)) {
+            $prestIm = 'ISENTO';
+        }
         if ($prestIm !== '') {
             $this->appendNodeNoNs($dom, $prest, 'IM', $prestIm);
         }
@@ -504,15 +518,22 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             $this->appendNodeNoNs($dom, $prest, 'xNome', $prestNome);
         }
 
-        $regTrib = $dom->createElement('regTrib');
+        $regTrib = $this->createElementWithNs($dom, 'regTrib');
         $prest->appendChild($regTrib);
-        $this->appendNodeNoNs($dom, $regTrib, 'opSimpNac', (string)($dados['prestador']['opSimpNac'] ?? '1'));
+        $opSimpNac = (string)($dados['prestador']['opSimpNac'] ?? '1');
+        $this->appendNodeNoNs($dom, $regTrib, 'opSimpNac', $opSimpNac);
+        
+        if ($opSimpNac !== '1') {
+            $regApTribSN = (string)($dados['prestador']['regApTribSN'] ?? '1');
+            $this->appendNodeNoNs($dom, $regTrib, 'regApTribSN', $regApTribSN);
+        }
+        
         $this->appendNodeNoNs($dom, $regTrib, 'regEspTrib', (string)($dados['prestador']['regEspTrib'] ?? '0'));
 
         $tomadorDoc = $this->onlyDigits((string)($dados['tomador']['documento'] ?? ''));
         $tomadorNome = trim((string)($dados['tomador']['razaoSocial'] ?? $dados['tomador']['nome'] ?? ''));
         if ($tomadorDoc !== '' && $tomadorNome !== '') {
-            $toma = $dom->createElement('toma');
+            $toma = $this->createElementWithNs($dom, 'toma');
             $inf->appendChild($toma);
             if (strlen($tomadorDoc) === 14) {
                 $this->appendNodeNoNs($dom, $toma, 'CNPJ', $tomadorDoc);
@@ -520,18 +541,27 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
                 $this->appendNodeNoNs($dom, $toma, 'CPF', str_pad(substr($tomadorDoc, 0, 11), 11, '0', STR_PAD_LEFT));
             }
             $this->appendNodeNoNs($dom, $toma, 'xNome', $tomadorNome);
+            
+            if (!empty($dados['tomador']['endereco'])) {
+                $this->addEnderecoTomador($dom, $toma, $dados['tomador']['endereco']);
+            }
+            
+            $email = trim((string)($dados['tomador']['email'] ?? ''));
+            if ($email !== '') {
+                $this->appendNodeNoNs($dom, $toma, 'email', $email);
+            }
         }
 
-        $serv = $dom->createElement('serv');
+        $serv = $this->createElementWithNs($dom, 'serv');
         $inf->appendChild($serv);
 
-        $locPrest = $dom->createElement('locPrest');
+        $locPrest = $this->createElementWithNs($dom, 'locPrest');
         $serv->appendChild($locPrest);
         $cLocPrestInput = (string)($dados['servico']['cLocPrestacao'] ?? $dados['servico']['codigo_municipio'] ?? $cLocEmi);
         $cLocPrest = str_pad(substr($this->onlyDigits($cLocPrestInput), 0, 7), 7, '0', STR_PAD_LEFT);
         $this->appendNodeNoNs($dom, $locPrest, 'cLocPrestacao', $cLocPrest);
 
-        $cServ = $dom->createElement('cServ');
+        $cServ = $this->createElementWithNs($dom, 'cServ');
         $serv->appendChild($cServ);
         $cTribNac = $this->normalizeCTribNac((string)($dados['servico']['cTribNac'] ?? $dados['servico']['codigoServicoNacional'] ?? $dados['servico']['codigo'] ?? ''));
         if ($cTribNac === '') {
@@ -539,18 +569,23 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
         $this->appendNodeNoNs($dom, $cServ, 'cTribNac', $cTribNac);
         $this->appendNodeNoNs($dom, $cServ, 'xDescServ', (string)($dados['servico']['descricao'] ?? $dados['servico']['discriminacao'] ?? 'Servico'));
+        
+        $cNBS = trim((string)($dados['servico']['cNBS'] ?? ''));
+        if ($cNBS !== '') {
+            $this->appendNodeNoNs($dom, $cServ, 'cNBS', $cNBS);
+        }
 
-        $valores = $dom->createElement('valores');
+        $valores = $this->createElementWithNs($dom, 'valores');
         $inf->appendChild($valores);
 
-        $vServPrest = $dom->createElement('vServPrest');
+        $vServPrest = $this->createElementWithNs($dom, 'vServPrest');
         $valores->appendChild($vServPrest);
         $valorServicos = (float)($dados['valor_servicos'] ?? 0);
         $this->appendNodeNoNs($dom, $vServPrest, 'vServ', $this->formatDecimal($valorServicos, 2));
 
-        $trib = $dom->createElement('trib');
+        $trib = $this->createElementWithNs($dom, 'trib');
         $valores->appendChild($trib);
-        $tribMun = $dom->createElement('tribMun');
+        $tribMun = $this->createElementWithNs($dom, 'tribMun');
         $trib->appendChild($tribMun);
         $tribIssqn = (string)($dados['servico']['tribISSQN'] ?? '1');
         $this->appendNodeNoNs($dom, $tribMun, 'tribISSQN', $tribIssqn);
@@ -563,19 +598,28 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         if ($sendPAliq && $aliquota > 0) {
             $this->appendNodeNoNs($dom, $tribMun, 'pAliq', $this->formatDecimal($aliquota, 2));
         }
+        
+        $vISSQN = 0.00;
+        $vCalcISS = $valorServicos;
+        if ($tribIssqn === '1' && $aliquota > 0) {
+            $vISSQN = ($valorServicos * $aliquota) / 100;
+            $vCalcISS = (float)($dados['servico']['base_calculo'] ?? $dados['servico']['vCalc'] ?? $valorServicos);
+            $this->appendNodeNoNs($dom, $tribMun, 'vCalc', $this->formatDecimal($vCalcISS, 2));
+            $this->appendNodeNoNs($dom, $tribMun, 'vISSQN', $this->formatDecimal($vISSQN, 2));
+        }
 
-        $totTrib = $dom->createElement('totTrib');
+        $totTrib = $this->createElementWithNs($dom, 'totTrib');
         $trib->appendChild($totTrib);
-        $vTotTrib = $dom->createElement('vTotTrib');
+        $vTotTrib = $this->createElementWithNs($dom, 'vTotTrib');
         $totTrib->appendChild($vTotTrib);
         $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribFed', '0.00');
         $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribEst', '0.00');
-        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribMun', '0.00');
-        $pTotTrib = $dom->createElement('pTotTrib');
+        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribMun', $this->formatDecimal($vISSQN, 2));
+        $pTotTrib = $this->createElementWithNs($dom, 'pTotTrib');
         $totTrib->appendChild($pTotTrib);
         $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribFed', '0.00');
         $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribEst', '0.00');
-        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribMun', '0.00');
+        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribMun', $aliquota > 0 ? $this->formatDecimal($aliquota, 2) : '0.00');
 
         return $dom->saveXML() ?: '';
     }
@@ -715,19 +759,21 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 
     private function shouldWrapDpsInNfse(): bool
     {
-        $root = strtolower((string)($this->config['dps_root'] ?? 'nfse'));
+        $root = strtolower((string)($this->config['dps_root'] ?? 'dps'));
         if ($root === 'dps') {
             return false;
         }
         if ($root === 'nfse') {
             return true;
         }
-        return true;
+        return false;
     }
 
     private function validarDadosDpsNacional(array $dados): void
     {
         $errors = [];
+
+        $tpEmit = (string)($dados['tpEmit'] ?? '1');
 
         $dCompet = (string)($dados['dCompet'] ?? date('Y-m-d'));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dCompet)) {
@@ -749,17 +795,26 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
             $errors[] = 'verAplic deve ter entre 1 e 20 caracteres.';
         }
 
-        $serie = $this->onlyDigits((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'));
+        $serie = $this->onlyDigits((string)($dados['serie'] ?? $dados['serie_rps'] ?? ($tpEmit === '1' ? '900' : '1')));
         if ($serie === '' || strlen($serie) > 5) {
             $errors[] = 'serie deve conter de 1 a 5 dígitos numéricos.';
+        }
+
+        $serieInt = (int)$serie;
+        if ($tpEmit === '1' && ($serieInt < 900 || $serieInt > 999)) {
+            $errors[] = 'Para tpEmit=1 (aplicativo próprio), série deve estar entre 00900 e 00999.';
+        } elseif ($tpEmit === '2' && ($serieInt < 990 || $serieInt > 999)) {
+            $errors[] = 'Para tpEmit=2 (emissor web), série deve estar entre 00990 e 00999.';
         }
 
         $nDps = $this->onlyDigits((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'));
         if ($nDps === '' || strlen($nDps) > 15) {
             $errors[] = 'nDPS deve conter de 1 a 15 dígitos numéricos.';
         }
+        if (strlen($nDps) > 9) {
+            $errors[] = 'nDPS muito grande. Use números sequenciais menores (recomendado: até 9 dígitos).';
+        }
 
-        $tpEmit = (string)($dados['tpEmit'] ?? '1');
         if (!in_array($tpEmit, ['1', '2', '3'], true)) {
             $errors[] = 'tpEmit deve ser 1, 2 ou 3.';
         }
@@ -1391,15 +1446,59 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $node;
     }
 
+    private function createElementWithNs(\DOMDocument $dom, string $name): \DOMElement
+    {
+        if ($this->xmlNamespace !== null) {
+            return $dom->createElementNS($this->xmlNamespace, $name);
+        }
+        return $dom->createElement($name);
+    }
+
     private function appendNodeNoNs(\DOMDocument $dom, \DOMElement $parent, string $name, ?string $value = null): \DOMElement
     {
-        $node = $dom->createElement($name);
+        $node = $this->createElementWithNs($dom, $name);
         if ($value !== null && $value !== '') {
             $normalizedValue = $this->normalizeXmlText($value);
             $node->appendChild($dom->createTextNode($normalizedValue));
         }
         $parent->appendChild($node);
         return $node;
+    }
+
+    private function addEnderecoTomador(\DOMDocument $dom, \DOMElement $toma, array $endereco): void
+    {
+        $end = $this->createElementWithNs($dom, 'end');
+        $toma->appendChild($end);
+        
+        $cMun = trim((string)($endereco['codigoMunicipio'] ?? $endereco['cMun'] ?? ''));
+        $cep = $this->onlyDigits((string)($endereco['cep'] ?? $endereco['CEP'] ?? ''));
+        
+        if ($cMun !== '' && $cep !== '') {
+            $endNac = $this->createElementWithNs($dom, 'endNac');
+            $end->appendChild($endNac);
+            $this->appendNodeNoNs($dom, $endNac, 'cMun', $cMun);
+            $this->appendNodeNoNs($dom, $endNac, 'CEP', $cep);
+        }
+        
+        $logradouro = trim((string)($endereco['logradouro'] ?? $endereco['xLgr'] ?? ''));
+        if ($logradouro !== '') {
+            $this->appendNodeNoNs($dom, $end, 'xLgr', $logradouro);
+        }
+        
+        $numero = trim((string)($endereco['numero'] ?? $endereco['nro'] ?? ''));
+        if ($numero !== '') {
+            $this->appendNodeNoNs($dom, $end, 'nro', $numero);
+        }
+        
+        $complemento = trim((string)($endereco['complemento'] ?? $endereco['xCpl'] ?? ''));
+        if ($complemento !== '') {
+            $this->appendNodeNoNs($dom, $end, 'xCpl', $complemento);
+        }
+        
+        $bairro = trim((string)($endereco['bairro'] ?? $endereco['xBairro'] ?? ''));
+        if ($bairro !== '') {
+            $this->appendNodeNoNs($dom, $end, 'xBairro', $bairro);
+        }
     }
 
     private function buildDpsId(array $dados, ?string $serie = null, ?string $nDps = null): string
@@ -1410,14 +1509,28 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         $insc = strlen($doc) === 14
             ? $doc
             : str_pad(substr($doc, 0, 11), 14, '0', STR_PAD_LEFT);
-        $serie = $serie !== null
-            ? $this->normalizeNumeric($serie, 5, '1')
-            : $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'), 5, '1');
-        $numero = $nDps !== null
-            ? $this->normalizeNumeric($nDps, 15, '1')
-            : $this->normalizeNumeric((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'), 15, '1');
+        
+        if ($serie === null) {
+            $tpEmit = (string)($dados['tpEmit'] ?? '1');
+            $serieDefault = $tpEmit === '1' ? '900' : '1';
+            $serie = $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? $serieDefault), 5, $serieDefault);
+        }
+        
+        if ($nDps === null) {
+            $nDpsRaw = (string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1');
+            $nDps = $this->onlyDigits($nDpsRaw);
+            if ($nDps === '') {
+                $nDps = '1';
+            }
+            if (strlen($nDps) > 9) {
+                $nDps = substr($nDps, -9);
+            }
+        }
+        
+        $serieFormatted = str_pad($this->onlyDigits($serie), 5, '0', STR_PAD_LEFT);
+        $numeroFormatted = str_pad($this->onlyDigits($nDps), 15, '0', STR_PAD_LEFT);
 
-        return 'DPS' . $cLoc . $tpInsc . $insc . $serie . $numero;
+        return 'DPS' . $cLoc . $tpInsc . $insc . $serieFormatted . $numeroFormatted;
     }
 
     private function normalizeNumeric(string $value, int $length, string $default): string
@@ -1527,7 +1640,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 
     private function assinarXmlSeNecessario(string $xml): string
     {
-        $signatureMode = (string) ($this->config['signature_mode'] ?? 'optional');
+        $signatureMode = (string) ($this->config['signature_mode'] ?? 'required');
         if ($signatureMode === 'none') {
             return $xml;
         }
@@ -1536,21 +1649,25 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         $certificate = $certManager->getCertificate();
         if ($certificate === null) {
             if ($signatureMode === 'required') {
-                throw new \RuntimeException('Certificado digital obrigatório para assinatura XML em homologação.');
+                throw new \RuntimeException('Certificado digital obrigatório para assinatura XML DPS Nacional.');
             }
+            error_log('[NFSe Nacional] Assinatura não aplicada: certificado não configurado.');
             return $xml;
         }
 
         try {
             [$signTag, $signAttr] = $this->resolveSignatureTarget($xml);
-            return Signer::sign(
+            $signedXml = Signer::sign(
                 $certificate,
                 $xml,
                 $signTag,
                 $signAttr,
                 OPENSSL_ALGO_SHA256
             );
+            error_log('[NFSe Nacional] XML assinado com sucesso: tag=' . $signTag . ', attr=' . $signAttr);
+            return $signedXml;
         } catch (\Throwable $e) {
+            error_log('[NFSe Nacional] Erro ao assinar XML: ' . $e->getMessage());
             if ($signatureMode === 'required') {
                 throw new \RuntimeException('Falha ao assinar XML NFSe: ' . $e->getMessage(), 0, $e);
             }
@@ -1576,7 +1693,7 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
 
         $dps = $xpath->query("//*[local-name()='infDPS']");
         if ($dps && $dps->length > 0) {
-            return ['infDPS', 'id'];
+            return ['infDPS', 'Id'];
         }
 
         return ['InfDeclaracaoPrestacaoServico', 'Id'];
