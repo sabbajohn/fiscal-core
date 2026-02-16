@@ -1,0 +1,27 @@
+#;REGRAS DE NEGÓCIO;;APLIC.;EFEITO;CÓD. ERRO;MSG. ERRO;NOTAS EXPLICATIVAS
+1;Validação do Certificado de Transmissão;;-;-;-;-;-
+2;"Certificado de Transmissor Inválido:
+- Certificado de Transmissor inexistente na mensagem
+- Versão difere ""3""
+- Se informado o Basic Constraint deve ser true (não pode ser Certificado de AC)
+- KeyUsage não define ""Autenticação Cliente""";;Obrig.;Rej.;E1200;Certificado de Transmissão Inválido;-
+3;Validade do Certificado (data início e data fim);;Obrig.;Rej.;E1203;Certificado de Transmissão expirado;-
+4;"Verifica a Cadeia de Certificação:
+- Certificado da AC emissora não cadastrado na RFB
+- Certificado de AC revogado
+- Certificado não assinado pela AC emissora do Certificado";;Obrig.;Rej.;E1205;Certificado de Transmissão - Erro Cadeira de Certificação;-
+5;"LCR do Certificado de Transmissor
+- Falta o endereço da LCR (CRL DistributionPoint)
+- LCR indisponível
+- LCR inválida";;Obrig.;Rej.;E1206;Certificado de Transmissão - Erro de acesso a LCR;-
+6;Certificado do Transmissor revogado;;Obrig.;Rej.;E1207;Certificado de Transmissão revogado;-
+7;"Certificado Raiz difere da ""ICP-Brasil""";;Obrig.;Rej.;E1208;Certificado de Transmissão difere da ICP - Brasil;-
+8;Falta a extensão de CNPJ ou CPF no Certificado (OtherName - OID=2.16.76.1.3.3);;Obrig.;Rej.;E1209;Certificado de Transmissão sem CNPJ ou CPF.;-
+9;Validação da Área de Dados;;-;-;-;-;-
+10;Falha na descompactado da base 64.;;Obrig.;Rej.;E1225;Falha na decodificação da base 64 da área de dados;-
+11;Estrutura descompactada mal formada.;;Obrig.;Rej.;E1226;Estrutura descompactada mal formada.;-
+12;Validação dos Tipos de Documentos;;-;-;-;-;-
+13;Validar os tipos de DF-e tratados pelo Sistema Nacional NFS-e.;;Obrig.;Rej.;E1242;Tipo DF-e não tratado pelo Sistema Nacional NFS-e.;-
+14;Uso de prefixo de namespace não permitido na área de dados descompactada.;;Obrig.;Rej.;E1228;Uso de prefixo de namespace não permitido na área de dados descompactada.;-
+15;XML não está utilizando codificação UTF8.;;Obrig.;Rej.;E1229;XML não está utilizando codificação UTF8.;-
+16;Falha no esquema XML do DF-e.;;Obrig.;Rej.;E1235;Falha no esquema XML do DF-e.;-
