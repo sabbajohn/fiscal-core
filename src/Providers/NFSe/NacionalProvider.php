@@ -436,12 +436,13 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
     {
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->formatOutput = false;
+        $ns = $this->getDpsNamespace();
 
         $serie = $this->normalizeNumeric((string)($dados['serie'] ?? $dados['serie_rps'] ?? '1'), 5, '1');
         $nDps = $this->normalizeNumeric((string)($dados['nDPS'] ?? $dados['numero_rps'] ?? '1'), 15, '1');
-        $dCompet = (string)($dados['dCompet'] ?? date('Y-m-d'));
+        $dCompet = $this->normalizeDpsDate((string)($dados['dCompet'] ?? ''));
         $tpAmb = (string)($dados['tpAmb'] ?? ($this->getAmbiente() === 'producao' ? '1' : '2'));
-        $dhEmi = (string)($dados['dhEmi'] ?? gmdate('Y-m-d\TH:i:s\Z'));
+        $dhEmi = $this->normalizeDpsDateTime((string)($dados['dhEmi'] ?? ''));
         $verAplic = (string)($dados['verAplic'] ?? $this->config['ver_aplic'] ?? 'invoiceflow-1.0');
         $tpEmit = (string)($dados['tpEmit'] ?? '1');
 
@@ -450,132 +451,132 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         $wrapInNfse = $this->shouldWrapDpsInNfse();
 
         if ($wrapInNfse) {
-            $root = $dom->createElement('NFSe');
+            $root = $dom->createElementNS($ns, 'NFSe');
             $root->setAttribute('versao', $versao);
             $dom->appendChild($root);
 
-            $infNfse = $dom->createElement('infNFSe');
+            $infNfse = $dom->createElementNS($ns, 'infNFSe');
             $nfseId = (string)($dados['nfse']['id'] ?? $dados['nfse_id'] ?? ('NFSe' . substr($dpsId, 3)));
             if ($nfseId !== '') {
                 $infNfse->setAttribute('Id', $nfseId);
             }
             $root->appendChild($infNfse);
 
-            $dps = $dom->createElement('DPS');
+            $dps = $dom->createElementNS($ns, 'DPS');
             $dps->setAttribute('versao', $versao);
             $infNfse->appendChild($dps);
         } else {
-            $dps = $dom->createElement('DPS');
+            $dps = $dom->createElementNS($ns, 'DPS');
             $dps->setAttribute('versao', $versao);
             $dom->appendChild($dps);
         }
 
-        $inf = $dom->createElement('infDPS');
+        $inf = $dom->createElementNS($ns, 'infDPS');
         $inf->setAttribute('Id', $dpsId);
         $dps->appendChild($inf);
-        $this->appendNodeNoNs($dom, $inf, 'id', $dpsId);
+        $this->appendNodeDps($dom, $inf, 'id', $dpsId);
 
-        $this->appendNodeNoNs($dom, $inf, 'tpAmb', $tpAmb);
-        $this->appendNodeNoNs($dom, $inf, 'dhEmi', $dhEmi);
-        $this->appendNodeNoNs($dom, $inf, 'verAplic', $verAplic);
-        $this->appendNodeNoNs($dom, $inf, 'serie', $serie);
-        $this->appendNodeNoNs($dom, $inf, 'nDPS', $nDps);
-        $this->appendNodeNoNs($dom, $inf, 'dCompet', $dCompet);
-        $this->appendNodeNoNs($dom, $inf, 'tpEmit', $tpEmit);
+        $this->appendNodeDps($dom, $inf, 'tpAmb', $tpAmb);
+        $this->appendNodeDps($dom, $inf, 'dhEmi', $dhEmi);
+        $this->appendNodeDps($dom, $inf, 'verAplic', $verAplic);
+        $this->appendNodeDps($dom, $inf, 'serie', $serie);
+        $this->appendNodeDps($dom, $inf, 'nDPS', $nDps);
+        $this->appendNodeDps($dom, $inf, 'dCompet', $dCompet);
+        $this->appendNodeDps($dom, $inf, 'tpEmit', $tpEmit);
 
         $cLocEmiInput = (string)($dados['cLocEmi'] ?? $dados['prestador']['codigoMunicipio'] ?? $this->getCodigoMunicipio());
         $cLocEmi = str_pad(substr($this->onlyDigits($cLocEmiInput), 0, 7), 7, '0', STR_PAD_LEFT);
-        $this->appendNodeNoNs($dom, $inf, 'cLocEmi', $cLocEmi);
+        $this->appendNodeDps($dom, $inf, 'cLocEmi', $cLocEmi);
 
-        $prest = $dom->createElement('prest');
+        $prest = $dom->createElementNS($ns, 'prest');
         $inf->appendChild($prest);
         $prestDoc = $this->onlyDigits((string)($dados['prestador']['cnpj'] ?? ''));
         if (strlen($prestDoc) === 14) {
-            $this->appendNodeNoNs($dom, $prest, 'CNPJ', $prestDoc);
+            $this->appendNodeDps($dom, $prest, 'CNPJ', $prestDoc);
         } else {
-            $this->appendNodeNoNs($dom, $prest, 'CPF', str_pad(substr($prestDoc, 0, 11), 11, '0', STR_PAD_LEFT));
+            $this->appendNodeDps($dom, $prest, 'CPF', str_pad(substr($prestDoc, 0, 11), 11, '0', STR_PAD_LEFT));
         }
         $prestIm = trim((string)($dados['prestador']['inscricaoMunicipal'] ?? ''));
         if ($prestIm !== '') {
-            $this->appendNodeNoNs($dom, $prest, 'IM', $prestIm);
+            $this->appendNodeDps($dom, $prest, 'IM', $prestIm);
         }
         $prestNome = trim((string)($dados['prestador']['razaoSocial'] ?? ''));
         if ($prestNome !== '' && $tpEmit !== '1') {
-            $this->appendNodeNoNs($dom, $prest, 'xNome', $prestNome);
+            $this->appendNodeDps($dom, $prest, 'xNome', $prestNome);
         }
 
-        $regTrib = $dom->createElement('regTrib');
+        $regTrib = $dom->createElementNS($ns, 'regTrib');
         $prest->appendChild($regTrib);
-        $this->appendNodeNoNs($dom, $regTrib, 'opSimpNac', (string)($dados['prestador']['opSimpNac'] ?? '1'));
-        $this->appendNodeNoNs($dom, $regTrib, 'regEspTrib', (string)($dados['prestador']['regEspTrib'] ?? '0'));
+        $this->appendNodeDps($dom, $regTrib, 'opSimpNac', (string)($dados['prestador']['opSimpNac'] ?? '1'));
+        $this->appendNodeDps($dom, $regTrib, 'regEspTrib', (string)($dados['prestador']['regEspTrib'] ?? '0'));
 
         $tomadorDoc = $this->onlyDigits((string)($dados['tomador']['documento'] ?? ''));
         $tomadorNome = trim((string)($dados['tomador']['razaoSocial'] ?? $dados['tomador']['nome'] ?? ''));
         if ($tomadorDoc !== '' && $tomadorNome !== '') {
-            $toma = $dom->createElement('toma');
+            $toma = $dom->createElementNS($ns, 'toma');
             $inf->appendChild($toma);
             if (strlen($tomadorDoc) === 14) {
-                $this->appendNodeNoNs($dom, $toma, 'CNPJ', $tomadorDoc);
+                $this->appendNodeDps($dom, $toma, 'CNPJ', $tomadorDoc);
             } else {
-                $this->appendNodeNoNs($dom, $toma, 'CPF', str_pad(substr($tomadorDoc, 0, 11), 11, '0', STR_PAD_LEFT));
+                $this->appendNodeDps($dom, $toma, 'CPF', str_pad(substr($tomadorDoc, 0, 11), 11, '0', STR_PAD_LEFT));
             }
-            $this->appendNodeNoNs($dom, $toma, 'xNome', $tomadorNome);
+            $this->appendNodeDps($dom, $toma, 'xNome', $tomadorNome);
         }
 
-        $serv = $dom->createElement('serv');
+        $serv = $dom->createElementNS($ns, 'serv');
         $inf->appendChild($serv);
 
-        $locPrest = $dom->createElement('locPrest');
+        $locPrest = $dom->createElementNS($ns, 'locPrest');
         $serv->appendChild($locPrest);
         $cLocPrestInput = (string)($dados['servico']['cLocPrestacao'] ?? $dados['servico']['codigo_municipio'] ?? $cLocEmi);
         $cLocPrest = str_pad(substr($this->onlyDigits($cLocPrestInput), 0, 7), 7, '0', STR_PAD_LEFT);
-        $this->appendNodeNoNs($dom, $locPrest, 'cLocPrestacao', $cLocPrest);
+        $this->appendNodeDps($dom, $locPrest, 'cLocPrestacao', $cLocPrest);
 
-        $cServ = $dom->createElement('cServ');
+        $cServ = $dom->createElementNS($ns, 'cServ');
         $serv->appendChild($cServ);
         $cTribNac = $this->normalizeCTribNac((string)($dados['servico']['cTribNac'] ?? $dados['servico']['codigoServicoNacional'] ?? $dados['servico']['codigo'] ?? ''));
         if ($cTribNac === '') {
             $cTribNac = '010101';
         }
-        $this->appendNodeNoNs($dom, $cServ, 'cTribNac', $cTribNac);
-        $this->appendNodeNoNs($dom, $cServ, 'xDescServ', (string)($dados['servico']['descricao'] ?? $dados['servico']['discriminacao'] ?? 'Servico'));
+        $this->appendNodeDps($dom, $cServ, 'cTribNac', $cTribNac);
+        $this->appendNodeDps($dom, $cServ, 'xDescServ', (string)($dados['servico']['descricao'] ?? $dados['servico']['discriminacao'] ?? 'Servico'));
 
-        $valores = $dom->createElement('valores');
+        $valores = $dom->createElementNS($ns, 'valores');
         $inf->appendChild($valores);
 
-        $vServPrest = $dom->createElement('vServPrest');
+        $vServPrest = $dom->createElementNS($ns, 'vServPrest');
         $valores->appendChild($vServPrest);
         $valorServicos = (float)($dados['valor_servicos'] ?? 0);
-        $this->appendNodeNoNs($dom, $vServPrest, 'vServ', $this->formatDecimal($valorServicos, 2));
+        $this->appendNodeDps($dom, $vServPrest, 'vServ', $this->formatDecimal($valorServicos, 2));
 
-        $trib = $dom->createElement('trib');
+        $trib = $dom->createElementNS($ns, 'trib');
         $valores->appendChild($trib);
-        $tribMun = $dom->createElement('tribMun');
+        $tribMun = $dom->createElementNS($ns, 'tribMun');
         $trib->appendChild($tribMun);
         $tribIssqn = (string)($dados['servico']['tribISSQN'] ?? '1');
-        $this->appendNodeNoNs($dom, $tribMun, 'tribISSQN', $tribIssqn);
-        $this->appendNodeNoNs($dom, $tribMun, 'tpRetISSQN', (string)($dados['servico']['tpRetISSQN'] ?? '1'));
+        $this->appendNodeDps($dom, $tribMun, 'tribISSQN', $tribIssqn);
+        $this->appendNodeDps($dom, $tribMun, 'tpRetISSQN', (string)($dados['servico']['tpRetISSQN'] ?? '1'));
         $aliquota = $this->normalizeDpsAliquotaPercent((float)($dados['servico']['aliquota'] ?? 0));
         $sendPAliq = (bool)($this->config['dps_send_paliq'] ?? ($tribIssqn === '1'));
         if (array_key_exists('enviarPAliq', (array)($dados['servico'] ?? []))) {
             $sendPAliq = (bool)$dados['servico']['enviarPAliq'];
         }
         if ($sendPAliq && $aliquota > 0) {
-            $this->appendNodeNoNs($dom, $tribMun, 'pAliq', $this->formatDecimal($aliquota, 2));
+            $this->appendNodeDps($dom, $tribMun, 'pAliq', $this->formatDecimal($aliquota, 2));
         }
 
-        $totTrib = $dom->createElement('totTrib');
+        $totTrib = $dom->createElementNS($ns, 'totTrib');
         $trib->appendChild($totTrib);
-        $vTotTrib = $dom->createElement('vTotTrib');
+        $vTotTrib = $dom->createElementNS($ns, 'vTotTrib');
         $totTrib->appendChild($vTotTrib);
-        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribFed', '0.00');
-        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribEst', '0.00');
-        $this->appendNodeNoNs($dom, $vTotTrib, 'vTotTribMun', '0.00');
-        $pTotTrib = $dom->createElement('pTotTrib');
+        $this->appendNodeDps($dom, $vTotTrib, 'vTotTribFed', '0.00');
+        $this->appendNodeDps($dom, $vTotTrib, 'vTotTribEst', '0.00');
+        $this->appendNodeDps($dom, $vTotTrib, 'vTotTribMun', '0.00');
+        $pTotTrib = $dom->createElementNS($ns, 'pTotTrib');
         $totTrib->appendChild($pTotTrib);
-        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribFed', '0.00');
-        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribEst', '0.00');
-        $this->appendNodeNoNs($dom, $pTotTrib, 'pTotTribMun', '0.00');
+        $this->appendNodeDps($dom, $pTotTrib, 'pTotTribFed', '0.00');
+        $this->appendNodeDps($dom, $pTotTrib, 'pTotTribEst', '0.00');
+        $this->appendNodeDps($dom, $pTotTrib, 'pTotTribMun', '0.00');
 
         return $dom->saveXML() ?: '';
     }
@@ -1402,6 +1403,17 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $node;
     }
 
+    private function appendNodeDps(\DOMDocument $dom, \DOMElement $parent, string $name, ?string $value = null): \DOMElement
+    {
+        $node = $dom->createElementNS($this->getDpsNamespace(), $name);
+        if ($value !== null && $value !== '') {
+            $normalizedValue = $this->normalizeXmlText($value);
+            $node->appendChild($dom->createTextNode($normalizedValue));
+        }
+        $parent->appendChild($node);
+        return $node;
+    }
+
     private function buildDpsId(array $dados, ?string $serie = null, ?string $nDps = null): string
     {
         $cLoc = str_pad(substr($this->onlyDigits((string)($dados['prestador']['codigoMunicipio'] ?? $this->getCodigoMunicipio())), 0, 7), 7, '0', STR_PAD_LEFT);
@@ -1525,6 +1537,52 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         return $aliquota;
     }
 
+    private function normalizeDpsDate(string $raw): string
+    {
+        $value = trim($raw);
+        if ($value !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            return $value;
+        }
+
+        if ($value !== '') {
+            try {
+                $parsed = new \DateTimeImmutable($value);
+                return $parsed->format('Y-m-d');
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return date('Y-m-d');
+    }
+
+    private function normalizeDpsDateTime(string $raw): string
+    {
+        $value = trim($raw);
+        $pattern = '/^(((20(([02468][048])|([13579][26]))-02-29))|(20[0-9][0-9])-((((0[1-9])|(1[0-2]))-((0[1-9])|(1\d)|(2[0-8])))|((((0[13578])|(1[02]))-31)|(((0[1,3-9])|(1[0-2]))-(29|30)))))T(20|21|22|23|[0-1]\d):[0-5]\d:[0-5]\d([\-,\+](0[0-9]|10|11):00|([\+](12):00))$/';
+
+        if ($value !== '' && preg_match($pattern, $value) === 1) {
+            return $value;
+        }
+
+        if ($value !== '') {
+            try {
+                $parsed = new \DateTimeImmutable($value);
+                $formatted = $parsed->format('Y-m-d\TH:i:sP');
+                if (preg_match($pattern, $formatted) === 1) {
+                    return $formatted;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:sP');
+    }
+
+    private function getDpsNamespace(): string
+    {
+        return (string) ($this->config['dps_xml_namespace'] ?? 'http://www.sped.fazenda.gov.br/nfse');
+    }
+
     private function assinarXmlSeNecessario(string $xml): string
     {
         $signatureMode = (string) ($this->config['signature_mode'] ?? 'optional');
@@ -1580,5 +1638,63 @@ class NacionalProvider extends AbstractNFSeProvider implements NFSeNacionalCapab
         }
 
         return ['InfDeclaracaoPrestacaoServico', 'Id'];
+    }
+
+    public function validarDpsXml(string $xml): array
+    {
+        $xsdPath = (string)($this->config['dps_xsd_path'] ?? (__DIR__ . '/Xsd/DPS_v1.00.xsd'));
+        libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
+        if (!is_file($xsdPath)) {
+            return [
+                'ok' => false,
+                'errors' => [
+                    [
+                        'type' => 'XSD',
+                        'message' => 'Arquivo XSD da DPS nao encontrado: ' . $xsdPath,
+                        'line' => null,
+                        'column' => null,
+                    ],
+                ],
+            ];
+        }
+
+        $dom = new \DOMDocument();
+        $dom->preserveWhiteSpace = false;
+
+        // Carrega XML direto da string (memória)
+        if (!$dom->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS)) {
+            $errs = array_map(function ($e) {
+                return [
+                'type' => 'XML_PARSE',
+                'message' => trim($e->message),
+                'line' => $e->line,
+                'column' => $e->column,
+                ];
+            }, libxml_get_errors());
+            libxml_clear_errors();
+            return ['ok' => false, 'errors' => $errs];
+        }
+
+        $ok = $dom->schemaValidate($xsdPath);
+
+        if ($ok) {
+            libxml_clear_errors();
+            return ['ok' => true, 'errors' => []];
+        }
+
+        $errs = array_map(function ($e) {
+            return [
+            'type' => 'XSD',
+            'message' => trim($e->message),
+            'line' => $e->line,
+            'column' => $e->column,
+            ];
+        }, libxml_get_errors());
+
+        libxml_clear_errors();
+        return ['ok' => false, 'errors' => $errs];
+
     }
 }

@@ -1,0 +1,146 @@
+C E N Á R I O S;ITENS DECLARADOS PELO EMITENTE DA DPS;;;;;;"CONCEITO DE 
+COMÉRCIO EXTERIOR 
+(Exportação)
+PARA 
+EMISSÃO DE NFS-e";;"COMPORTAMENTO DO SISTEMA APÓS A VALIDAÇÃO DOS 
+ITENS DECLARADOS PELO EMITENTE DA DPS";;;;
+;LOCAIS;;;"SUBITEM
+DA LISTA";RESPOSTA DO EMITENTE PARA A TRIBUTAÇÃO DO ISSQN (TribISSQN);;;;EXIBE MENSAGEM DE ERRO OU AVISO?;"LOCAL DE
+INCIDÊNCIA";"INFORMAÇÕES ESPECÍFICAS 
+RELATIVAS A COMEX";;
+;"Endereço
+Tomador";"Endereço
+Intermediário";"Local da
+Prestação do
+Serviço (LP)";"Qual seria o local de Incidência
+do ISSQN conforme subitem da lista de serviço informado";"O serviço prestado é um caso de: imunidade, exportação de serviço ou 
+não incidência 
+do ISSQN?";"Tributação do ISSQN
+";ISSQN;RFB;;Para cada cenário define a existência ou não e qual o município de incidência?;"Para cada cenário, o preenchimento das seguintes informações deve ser:
+
+OBRIGATÓRIO (SIM)
+NÃO PERMITIDO (NÃO)
+OPCIONAL (Opcional)
+ CENÁRIO INEXISTENTE (X)
+
+Obs: Nos cenários inexistentes os campos NBS, País Resultado (Exportação) e Grupo Comex não serão validados pois o sistema retorna a mensagem de erro correspondente.";;
+;;;;;;;"EXPORTAÇÃO
+Local da Prestação
+no Exterior";AO MENOS 1 DOS 3 LOCAIS NO EXTERIOR;;;;;
+;;;;;;;"É exportação
+para o ISSQN?";"É exportação
+para a RFB?";;;NBS;"País Resultado
+(Exportação)";"Grupo
+Comex"
+1;Brasil;Brasil;Brasil;EP;Sim;Imunidade;-;NÃO;-;-;Opcional;NÃO;NÃO
+2;Brasil;Brasil;Brasil;EP;Sim;Exportação de Serviço;NÃO;NÃO;-;-;SIM;SIM;SIM
+3;Brasil;Brasil;Brasil;EP;Sim;Não Incidência;-;NÃO;MENSAGEM ERRO 3;X;X;X;X
+4;Brasil;Brasil;Brasil;EP;Não;Operação Tributável;NÃO;NÃO;-;Município do EP;Opcional;NÃO;NÃO
+5;Brasil;Brasil;Brasil;ET;Sim;Imunidade;-;NÃO;-;-;Opcional;NÃO;NÃO
+6;Brasil;Brasil;Brasil;ET;Sim;Exportação de Serviço;NÃO;NÃO;MENSAGEM ERRO 1;X;X;X;X
+7;Brasil;Brasil;Brasil;ET;Sim;Não Incidência;-;NÃO;MENSAGEM ERRO 3;X;X;X;X
+8;Brasil;Brasil;Brasil;ET;Não;Operação Tributável;NÃO;NÃO;-;Município do ET;Opcional;NÃO;NÃO
+9;Brasil;Brasil;Brasil;LP;Sim;Imunidade;-;NÃO;-;-;Opcional;NÃO;NÃO
+10;Brasil;Brasil;Brasil;LP;Sim;Exportação de Serviço;NÃO;NÃO;MENSAGEM ERRO 1;X;X;X;X
+11;Brasil;Brasil;Brasil;LP;Sim;Não Incidência;-;NÃO;MENSAGEM ERRO 3;X;X;X;X
+12;Brasil;Brasil;Brasil;LP;Não;Operação Tributável;NÃO;NÃO;-;Município do LP;Opcional;NÃO;NÃO
+13;Brasil;Brasil;Brasil;99.01.01;Sim;Não Incidência;-;NÃO;-;-;Opcional;NÃO;NÃO
+14;Brasil;Brasil;Brasil;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;NÃO;-;-;Opcional;NÃO;NÃO
+15;Brasil;Brasil;Ext;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+16;Brasil;Brasil;Ext;EP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+17;Brasil;Brasil;Ext;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+18;Brasil;Brasil;Ext;EP;Não;Operação Tributável;SIM;SIM;-;Município do EP;SIM;NÃO;SIM
+19;Brasil;Brasil;Ext;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+20;Brasil;Brasil;Ext;ET;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+21;Brasil;Brasil;Ext;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+22;Brasil;Brasil;Ext;ET;Não;Operação Tributável;SIM;SIM;-;Município do ET;SIM;NÃO;SIM
+23;Brasil;Brasil;Ext;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+24;Brasil;Brasil;Ext;LP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+25;Brasil;Brasil;Ext;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+26;Brasil;Brasil;Ext;LP;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+27;Brasil;Brasil;Ext;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+28;Brasil;Brasil;Ext;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+29;Brasil;Ext;Brasil;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+30;Brasil;Ext;Brasil;EP;Sim;Exportação de Serviço;NÃO;SIM;-;-;SIM;SIM;SIM
+31;Brasil;Ext;Brasil;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+32;Brasil;Ext;Brasil;EP;Não;Operação Tributável;NÃO;SIM;-;Município do EP;SIM;NÃO;SIM
+33;Brasil;Ext;Brasil;ET;Sim;Imunidade;-;SIM;-;-;SIM;-;SIM
+34;Brasil;Ext;Brasil;ET;Sim;Exportação de Serviço;NÃO;SIM;MENSAGEM ERRO 1;X;X;X;X
+35;Brasil;Ext;Brasil;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+36;Brasil;Ext;Brasil;ET;Não;Operação Tributável;NÃO;SIM;-;Município do ET;SIM;NÃO;SIM
+37;Brasil;Ext;Brasil;LP;Sim;Imunidade;-;SIM;-;-;SIM;-;SIM
+38;Brasil;Ext;Brasil;LP;Sim;Exportação de Serviço;NÃO;SIM;MENSAGEM ERRO 1;X;X;X;X
+39;Brasil;Ext;Brasil;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+40;Brasil;Ext;Brasil;LP;Não;Operação Tributável;NÃO;SIM;-;Município do LP;SIM;NÃO;SIM
+41;Brasil;Ext;Brasil;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+42;Brasil;Ext;Brasil;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+43;Brasil;Ext;Ext;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+44;Brasil;Ext;Ext;EP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+45;Brasil;Ext;Ext;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+46;Brasil;Ext;Ext;EP;Não;Operação Tributável;SIM;SIM;-;Município do EP;SIM;NÃO;SIM
+47;Brasil;Ext;Ext;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+48;Brasil;Ext;Ext;ET;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+49;Brasil;Ext;Ext;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+50;Brasil;Ext;Ext;ET;Não;Operação Tributável;SIM;SIM;-;Município do ET;SIM;NÃO;SIM
+51;Brasil;Ext;Ext;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+52;Brasil;Ext;Ext;LP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+53;Brasil;Ext;Ext;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+54;Brasil;Ext;Ext;LP;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+55;Brasil;Ext;Ext;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+56;Brasil;Ext;Ext;Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+57;Ext;Brasil;Brasil;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+58;Ext;Brasil;Brasil;EP;Sim;Exportação de Serviço;NÃO;SIM;-;-;SIM;SIM;SIM
+59;Ext;Brasil;Brasil;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+60;Ext;Brasil;Brasil;EP;Não;Operação Tributável;NÃO;SIM;-;Município do EP;SIM;NÃO;SIM
+61;Ext;Brasil;Brasil;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+62;Ext;Brasil;Brasil;ET;Sim;Exportação de Serviço;NÃO;SIM;-;-;SIM;SIM;SIM
+63;Ext;Brasil;Brasil;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+64;Ext;Brasil;Brasil;ET;Não;Operação Tributável;NÃO;SIM;MENSAGEM AVISO 1;Município do LP;SIM;NÃO;SIM
+65;Ext;Brasil;Brasil;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+66;Ext;Brasil;Brasil;LP;Sim;Exportação de Serviço;NÃO;SIM;MENSAGEM ERRO 1;X;X;X;X
+67;Ext;Brasil;Brasil;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+68;Ext;Brasil;Brasil;LP;Não;Operação Tributável;NÃO;SIM;-;Município do LP;SIM;SIM;SIM
+69;Ext;Brasil;Brasil;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+70;Ext;Brasil;Brasil;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+71;Ext;Ext;Brasil;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+72;Ext;Ext;Brasil;EP;Sim;Exportação de Serviço;NÃO;SIM;-;-;SIM;SIM;SIM
+73;Ext;Ext;Brasil;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+74;Ext;Ext;Brasil;EP;Não;Operação Tributável;NÃO;SIM;-;Município do EP;SIM;NÃO;SIM
+75;Ext;Ext;Brasil;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+76;Ext;Ext;Brasil;ET;Sim;Exportação de Serviço;NÃO;SIM;-;-;SIM;SIM;SIM
+77;Ext;Ext;Brasil;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+78;Ext;Ext;Brasil;ET;Não;Operação Tributável;NÃO;SIM;MENSAGEM AVISO 1;Município do LP;SIM;NÃO;SIM
+79;Ext;Ext;Brasil;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+80;Ext;Ext;Brasil;LP;Sim;Exportação de Serviço;NÃO;SIM;MENSAGEM ERRO 1;X;X;X;X
+81;Ext;Ext;Brasil;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+82;Ext;Ext;Brasil;LP;Não;Operação Tributável;NÃO;SIM;-;Município do LP;SIM;NÃO;SIM
+83;Ext;Ext;Brasil;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+84;Ext;Ext;Brasil;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+85;Ext;Brasil;Ext;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+86;Ext;Brasil;Ext;EP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+87;Ext;Brasil;Ext;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+88;Ext;Brasil;Ext;EP;Não;Operação Tributável;SIM;SIM;-;Município do EP;SIM;NÃO;SIM
+89;Ext;Brasil;Ext;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+90;Ext;Brasil;Ext;ET;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+91;Ext;Brasil;Ext;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+92;Ext;Brasil;Ext;ET;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+93;Ext;Brasil;Ext;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+94;Ext;Brasil;Ext;LP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+95;Ext;Brasil;Ext;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+96;Ext;Brasil;Ext;LP;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+97;Ext;Brasil;Ext;99.01.01;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+98;Ext;Brasil;Ext;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
+99;Ext;Ext;Ext;EP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+100;Ext;Ext;Ext;EP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+101;Ext;Ext;Ext;EP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+102;Ext;Ext;Ext;EP;Não;Operação Tributável;SIM;SIM;-;Município do EP;SIM;NÃO;SIM
+103;Ext;Ext;Ext;ET;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+104;Ext;Ext;Ext;ET;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+105;Ext;Ext;Ext;ET;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+106;Ext;Ext;Ext;ET;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+107;Ext;Ext;Ext;LP;Sim;Imunidade;-;SIM;-;-;SIM;NÃO;SIM
+108;Ext;Ext;Ext;LP;Sim;Exportação de Serviço;SIM;SIM;-;-;SIM;NÃO;SIM
+109;Ext;Ext;Ext;LP;Sim;Não Incidência;-;SIM;MENSAGEM ERRO 3;X;X;X;X
+110;Ext;Ext;Ext;LP;Não;Operação Tributável;SIM;SIM;MENSAGEM ERRO 2;X;X;X;X
+111;Ext;Ext;Ext;99.01.01;Sim;Não Incidência;SIM;SIM;-;-;SIM;NÃO;SIM
+112;Ext;Brasil;Ext;Qq.Serv.Param.Mun.Incid.;Sim;Não Incidência;-;SIM;-;-;SIM;NÃO;SIM
