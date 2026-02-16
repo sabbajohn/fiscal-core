@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.4 - 2026-02-16
+
+### Changed
+- `NacionalProvider` agora gera DPS com namespace oficial do ambiente nacional (`http://www.sped.fazenda.gov.br/nfse`).
+- Normalizacao de datas da DPS com regex oficial e fallback seguro para `dhEmi` e `dCompet`.
+- Validacao do XML DPS exposta em `validarDpsXml()` usando XSD local.
+
+### Notes
+- A execucao local de testes nao foi realizada neste ambiente.
+
 ## v1.1.2 - 2026-02-11
 
 ### Added
