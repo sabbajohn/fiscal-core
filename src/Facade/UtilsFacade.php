@@ -201,7 +201,7 @@ class UtilsFacade
     /**
      * Lista feriados nacionais do ano
      */
-    public function listarFeriados(int $ano = null): FiscalResponse
+    public function listarFeriados(?int $ano = null): FiscalResponse
     {
         return $this->responseHandler->execute(function() use ($ano) {
             $ano = $ano ?? date('Y');

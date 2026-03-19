@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="NFSeMunicipalHomologationRealTest" file="/Users/johnsabba/Projects/Freeline/fiscal-core/tests/Integration/NFSeMunicipalHomologationRealTest.php" tests="1" assertions="5" errors="0" failures="1" skipped="0" time="1.221422">
+    <testcase name="testJoinvilleRealHomologationSend" file="/Users/johnsabba/Projects/Freeline/fiscal-core/tests/Integration/NFSeMunicipalHomologationRealTest.php" line="54" class="NFSeMunicipalHomologationRealTest" classname="NFSeMunicipalHomologationRealTest" assertions="5" time="1.221422">
+      <failure type="PHPUnit\Framework\AssertionFailedError">NFSeMunicipalHomologationRealTest::testJoinvilleRealHomologationSend
+joinville: retorno não autorizado. status=invalid_xml. detalhes=Resposta XML inválida do webservice de Joinville. | Endpoint de Joinville retornou HTTP 502 com HTML de gateway/proxy, antes de devolver XML NFSe.
+
+/Users/johnsabba/Projects/Freeline/fiscal-core/tests/Integration/NFSeMunicipalHomologationRealTest.php:125
+/Users/johnsabba/Projects/Freeline/fiscal-core/tests/Integration/NFSeMunicipalHomologationRealTest.php:80</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

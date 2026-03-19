@@ -1,0 +1,393 @@
+<?php
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__, 2) . '/Fixtures/NFSeBelemMunicipalFixtures.php';
+require_once dirname(__DIR__, 2) . '/Fixtures/NFSeJoinvilleMunicipalFixtures.php';
+
+use freeline\FiscalCore\Support\CertificateManager;
+use freeline\FiscalCore\Support\ConfigManager;
+use freeline\FiscalCore\Support\NFSeMunicipalHomologationService;
+use freeline\FiscalCore\Support\NFSeSoapTransportInterface;
+use freeline\FiscalCore\Support\ProviderRegistry;
+use PHPUnit\Framework\TestCase;
+
+final class NFSeMunicipalHomologationServiceTest extends TestCase
+{
+    private string $projectRoot;
+    /** @var string[] */
+    private array $envKeys = [
+        'FISCAL_ENVIRONMENT',
+        'FISCAL_IM',
+        'FISCAL_RAZAO_SOCIAL',
+        'FISCAL_CERT_PATH',
+        'FISCAL_CERT_PASSWORD',
+        'OPENSSL_CONF',
+        'FISCAL_CNPJ',
+        'FISCAL_UF',
+    ];
+
+    protected function setUp(): void
+    {
+        $this->projectRoot = dirname(__DIR__, 3);
+        $this->clearEnvironment();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->clearEnvironment();
+        ProviderRegistry::getInstance()->reload();
+        ConfigManager::getInstance()->reload();
+        CertificateManager::reload();
+    }
+
+    public function testPreviewBuildsJoinvilleRequestFromEnvAndMockedTomadorLookup(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_IM=123456
+FISCAL_RAZAO_SOCIAL="Freeline Informatica Ltda"
+ENV);
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $cnpj): array => [
+                'cnpj' => $cnpj,
+                'razao_social' => 'Tomador Mock Joinville Ltda',
+                'telefone' => '(47) 99999-1234',
+                'email' => 'financeiro@example.com',
+                'endereco' => [
+                    'logradouro' => 'Rua do Comercio',
+                    'numero' => '100',
+                    'bairro' => 'Centro',
+                    'cep' => '89201001',
+                    'municipio' => 'Joinville',
+                    'uf' => 'SC',
+                ],
+            ]
+        );
+
+        $result = $service->preview('joinville', '11222333000181', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026-senha-free2026.pfx',
+                'FISCAL_CERT_PASSWORD' => 'free2026',
+            ],
+        ]);
+
+        $this->assertSame('preview', $result['mode']);
+        $this->assertSame('joinville', $result['provider']['municipio']);
+        $this->assertStringContainsString('PublicaProvider', $result['provider']['class']);
+        $this->assertSame('success', $result['parsed_response']['status']);
+        $this->assertSame('Tomador Mock Joinville Ltda', $result['tomador']['razao_social']);
+        $this->assertStringContainsString('<GerarNfseEnvio', (string) $result['request_xml']);
+        $this->assertNotEmpty($result['resolved_paths']['FISCAL_CERT_PATH'] ?? null);
+    }
+
+    public function testPreviewFailsWhenFiscalImIsMissing(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_RAZAO_SOCIAL="Freeline Informatica Ltda"
+ENV);
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $cnpj): array => [
+                'cnpj' => $cnpj,
+                'razao_social' => 'Tomador Mock Ltda',
+                'endereco' => [
+                    'logradouro' => 'Rua 1',
+                    'numero' => '10',
+                    'bairro' => 'Centro',
+                    'cep' => '89201001',
+                    'municipio' => 'Joinville',
+                    'uf' => 'SC',
+                ],
+            ]
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('FISCAL_IM');
+
+        $service->preview('joinville', '000000000000000', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026.pfx',
+                'FISCAL_CERT_PASSWORD' => '2026',
+            ],
+        ]);
+    }
+
+    public function testPreviewLoadsFaivesLegacyCertificateWhenOpenSslConfIsProvided(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_IM=4007197
+FISCAL_RAZAO_SOCIAL="Faives Solucoes em Tecnologia Ltda"
+ENV);
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $cnpj): array => [
+                'cnpj' => $cnpj,
+                'razao_social' => 'Tomador Mock Belem Ltda',
+                'telefone' => '(91) 99999-0000',
+                'email' => 'financeiro@example.com',
+                'endereco' => [
+                    'logradouro' => 'Rua das Mangueiras',
+                    'numero' => '100',
+                    'bairro' => 'Nazare',
+                    'cep' => '66000000',
+                    'municipio' => 'Belem',
+                    'uf' => 'PA',
+                ],
+            ]
+        );
+
+        $result = $service->preview('belem', '000000000000000', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert.p12',
+                'FISCAL_CERT_PASSWORD' => '',
+                'OPENSSL_CONF' => $this->projectRoot . '/openssl.cnf',
+            ],
+        ]);
+
+        $this->assertSame('41954766000192', $result['certificate']['cnpj']);
+        $this->assertSame('success', $result['parsed_response']['status']);
+        $this->assertStringContainsString('<EnviarLoteRpsSincronoEnvio', (string) $result['request_xml']);
+        $this->assertSame(
+            realpath($this->projectRoot . '/openssl.cnf'),
+            $result['resolved_paths']['OPENSSL_CONF'] ?? null
+        );
+    }
+
+    public function testPreviewAcceptsCpfTomadorWhenLookupProvidesAddress(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_IM=123456
+FISCAL_RAZAO_SOCIAL="Freeline Informatica Ltda"
+ENV);
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $documento): array => [
+                'documento' => $documento,
+                'razao_social' => 'JOHNNATHAN VICTOR GONCALVES SABBA',
+                'endereco' => [
+                    'logradouro' => 'Rua Homologacao',
+                    'numero' => 'S/N',
+                    'bairro' => 'Centro',
+                    'cep' => '89220650',
+                    'municipio' => 'Joinville',
+                    'uf' => 'SC',
+                    'codigo_municipio' => '4209102',
+                ],
+            ]
+        );
+
+        $result = $service->preview('joinville', '00980556236', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026-senha-free2026.pfx',
+                'FISCAL_CERT_PASSWORD' => 'free2026',
+            ],
+        ]);
+
+        $this->assertSame('00980556236', $result['tomador']['documento']);
+        $this->assertSame('JOHNNATHAN VICTOR GONCALVES SABBA', $result['tomador']['razao_social']);
+        $this->assertSame('success', $result['parsed_response']['status']);
+    }
+
+    public function testSendBuildsBelemRequestAndDispatchesThroughSoapTransport(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_IM=4007197
+FISCAL_RAZAO_SOCIAL="Faives Solucoes em Tecnologia Ltda"
+ENV);
+
+        $transport = new class implements NFSeSoapTransportInterface {
+            public array $calls = [];
+
+            public function send(string $endpoint, string $envelope, array $options = []): array
+            {
+                $this->calls[] = compact('endpoint', 'envelope', 'options');
+
+                return [
+                    'request_xml' => $envelope,
+                    'response_xml' => NFSeBelemMunicipalFixtures::successSoapResponse(),
+                    'status_code' => 200,
+                    'headers' => ['Content-Type: text/xml'],
+                ];
+            }
+        };
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $documento): array => [
+                'documento' => $documento,
+                'razao_social' => 'JOHNNATHAN VICTOR GONCALVES SABBA',
+                'endereco' => [
+                    'numero' => 'S/N',
+                    'cep' => '66065112',
+                ],
+            ]
+        );
+
+        $result = $service->send('belem', '00980556236', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert_faives_41954766000192_SENHA_12345678.p12',
+                'FISCAL_CERT_PASSWORD' => '12345678',
+                'OPENSSL_CONF' => $this->projectRoot . '/openssl.cnf',
+            ],
+            'provider_config_overrides' => [
+                'soap_transport' => $transport,
+            ],
+            'tomador_defaults' => [
+                'cep' => '66065112',
+                'endereco' => [
+                    'numero' => 'S/N',
+                ],
+            ],
+        ]);
+
+        $this->assertSame('send', $result['mode']);
+        $this->assertSame('belem', $result['provider']['municipio']);
+        $this->assertSame('success', $result['parsed_response']['status']);
+        $this->assertCount(1, $transport->calls);
+        $this->assertSame(
+            'https://sefin-hml.belem.pa.gov.br/notafiscal-abrasfv203-ws/NotaFiscalSoap',
+            $transport->calls[0]['endpoint']
+        );
+        $this->assertStringContainsString('<svc:RecepcionarLoteRpsSincrono>', (string) $result['soap_envelope']);
+        $this->assertStringContainsString('<EnviarLoteRpsSincronoEnvio', (string) $result['request_xml']);
+
+        $dom = new DOMDocument();
+        $dom->loadXML((string) $result['request_xml']);
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+        $references = [];
+        foreach ($xpath->query('//ds:Signature/ds:SignedInfo/ds:Reference/@URI') as $node) {
+            $references[] = $node->nodeValue;
+        }
+        sort($references);
+
+        $this->assertSame(['#LOTE-BELEM-', '#RPS-BELEM-'], array_map(
+            static fn (string $reference): string => str_starts_with($reference, '#LOTE-BELEM-')
+                ? '#LOTE-BELEM-'
+                : '#RPS-BELEM-',
+            $references
+        ));
+
+        $signatureMethods = [];
+        foreach ($xpath->query('//ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm') as $node) {
+            $signatureMethods[] = $node->nodeValue;
+        }
+        $this->assertSame(
+            [
+                'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+                'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            ],
+            $signatureMethods
+        );
+    }
+
+    public function testSendBuildsJoinvilleRequestAndDispatchesThroughSoapTransport(): void
+    {
+        $envPath = $this->makeEnvFile(<<<ENV
+FISCAL_ENVIRONMENT=homologacao
+FISCAL_IM=987654321
+FISCAL_RAZAO_SOCIAL="FREELINE INFORMATICA LTDA"
+FISCAL_CNPJ="83188342000104"
+FISCAL_UF="SC"
+ENV);
+
+        $transport = new class implements NFSeSoapTransportInterface {
+            public array $calls = [];
+
+            public function send(string $endpoint, string $envelope, array $options = []): array
+            {
+                $this->calls[] = compact('endpoint', 'envelope', 'options');
+
+                return [
+                    'request_xml' => $envelope,
+                    'response_xml' => NFSeJoinvilleMunicipalFixtures::successSoapResponse(),
+                    'status_code' => 200,
+                    'headers' => ['Content-Type: text/xml'],
+                ];
+            }
+        };
+
+        $service = new NFSeMunicipalHomologationService(
+            $this->projectRoot,
+            fn (string $documento): array => [
+                'documento' => $documento,
+                'razao_social' => 'JOHNNATHAN VICTOR GONCALVES SABBA',
+                'endereco' => [
+                    'numero' => 'S/N',
+                    'cep' => '89220650',
+                ],
+            ]
+        );
+
+        $result = $service->send('joinville', '00980556236', [
+            'env_path' => $envPath,
+            'env_overrides' => [
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026-senha-free2026.pfx',
+                'FISCAL_CERT_PASSWORD' => 'free2026',
+                'FISCAL_CNPJ' => '83188342000104',
+                'FISCAL_RAZAO_SOCIAL' => 'FREELINE INFORMATICA LTDA',
+                'FISCAL_UF' => 'SC',
+            ],
+            'provider_config_overrides' => [
+                'soap_transport' => $transport,
+            ],
+            'tomador_defaults' => [
+                'cep' => '89220650',
+                'endereco' => [
+                    'numero' => 'S/N',
+                ],
+            ],
+        ]);
+
+        $this->assertSame('send', $result['mode']);
+        $this->assertSame('joinville', $result['provider']['municipio']);
+        $this->assertSame('success', $result['parsed_response']['status']);
+        $this->assertSame('83188342000104', $result['prestador']['cnpj']);
+        $this->assertSame('FREELINE INFORMATICA LTDA', $result['prestador']['razao_social']);
+        $this->assertCount(1, $transport->calls);
+        $this->assertSame(
+            'https://nfsehomologacao.joinville.sc.gov.br/nfse_integracao/Services',
+            $transport->calls[0]['endpoint']
+        );
+        $this->assertStringContainsString('<svc:GerarNfse>', (string) $result['soap_envelope']);
+        $this->assertStringContainsString('<GerarNfseEnvio', (string) $result['request_xml']);
+        $this->assertStringContainsString('<Cnpj>83188342000104</Cnpj>', (string) $result['request_xml']);
+        $this->assertStringContainsString('<InscricaoMunicipal>987654321</InscricaoMunicipal>', (string) $result['request_xml']);
+    }
+
+    private function makeEnvFile(string $contents): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nfse-hml-');
+        if ($path === false) {
+            $this->fail('Nao foi possivel criar arquivo temporario .env');
+        }
+
+        file_put_contents($path, $contents);
+
+        return $path;
+    }
+
+    private function clearEnvironment(): void
+    {
+        foreach ($this->envKeys as $key) {
+            unset($_ENV[$key]);
+            putenv($key);
+        }
+    }
+}

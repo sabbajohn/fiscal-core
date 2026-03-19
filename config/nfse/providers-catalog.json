@@ -1,0 +1,69 @@
+{
+    "version": 1,
+    "generated_at": "2026-03-19T11:14:17+00:00",
+    "municipios": {
+        "1001058": {
+            "slug": "nacional",
+            "nome": "Nacional",
+            "uf": "AN",
+            "provider_family": "nfse_nacional",
+            "schema_package": "NACIONAL",
+            "ibge": "1001058",
+            "homologado": false,
+            "active": true
+        },
+        "1302603": {
+            "slug": "manaus",
+            "nome": "Manaus",
+            "uf": "AM",
+            "provider_family": "MANAUS_AM",
+            "schema_package": "MANAUS_AM",
+            "ibge": "1302603",
+            "homologado": false,
+            "active": true
+        },
+        "1501402": {
+            "slug": "belem",
+            "nome": "Belem",
+            "uf": "PA",
+            "provider_family": "BELEM_MUNICIPAL_2025",
+            "schema_package": "BELEM_MUNICIPAL_2025",
+            "ibge": "1501402",
+            "homologado": false,
+            "active": true,
+            "provider_note": "Belém migrado para provider municipal atual; override local sobre catálogo UniNFe."
+        },
+        "4209102": {
+            "slug": "joinville",
+            "nome": "Joinville",
+            "uf": "SC",
+            "provider_family": "PUBLICA",
+            "schema_package": "PUBLICA",
+            "ibge": "4209102",
+            "homologado": false,
+            "active": true
+        }
+    },
+    "aliases": {
+        "1001058": "1001058",
+        "1302603": "1302603",
+        "1501402": "1501402",
+        "4209102": "4209102",
+        "belem": "1501402",
+        "belem pa": "1501402",
+        "belem-pa": "1501402",
+        "belem/pa": "1501402",
+        "joinville": "4209102",
+        "joinville sc": "4209102",
+        "joinville-sc": "4209102",
+        "joinville/sc": "4209102",
+        "manaus": "1302603",
+        "manaus am": "1302603",
+        "manaus-am": "1302603",
+        "manaus/am": "1302603",
+        "nacional": "1001058",
+        "nacional an": "1001058",
+        "nacional-an": "1001058",
+        "nacional/an": "1001058"
+    }
+}

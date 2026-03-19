@@ -1,0 +1,20 @@
+{
+    "generated_at": "2026-03-19T11:14:17+00:00",
+    "source_base": "Uninfe/source/NFe.Components.Wsdl/NFse/schemas/NFSe",
+    "target_base": "resources/nfse/schemas",
+    "mode": "selected",
+    "custom_schema_families": {
+        "BELEM_MUNICIPAL_2025": "scripts/nfse/schema-overrides/BELEM_MUNICIPAL_2025",
+        "PUBLICA": "scripts/nfse/schema-overrides/PUBLICA"
+    },
+    "families": {
+        "PUBLICA": {
+            "status": "imported",
+            "files": 3,
+            "source_kind": "custom_override",
+            "source": "scripts/nfse/schema-overrides/PUBLICA",
+            "target": "resources/nfse/schemas/PUBLICA"
+        }
+    },
+    "warnings": []
+}

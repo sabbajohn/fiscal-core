@@ -1,172 +1,111 @@
 <?php
 
-/**
- * EXEMPLO AVANÇADO: Múltiplos municípios NFSe
- * 
- * Como trabalhar com diferentes municípios simultaneamente
- */
+declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-use freeline\FiscalCore\Facade\NFSeFacade;
+use freeline\FiscalCore\Contracts\NFSeOperationalIntrospectionInterface;
 use freeline\FiscalCore\Facade\FiscalFacade;
+use freeline\FiscalCore\Facade\NFSeFacade;
+use freeline\FiscalCore\Support\NFSeMunicipalPayloadFactory;
+use freeline\FiscalCore\Support\NFSeMunicipalPreviewSupport;
+use freeline\FiscalCore\Support\ProviderRegistry;
 
-echo "🏘️ EXEMPLO AVANÇADO: Múltiplos Municípios NFSe\n";
-echo "==============================================\n\n";
+function previewMunicipalProvider(string $municipio): array
+{
+    $factory = new NFSeMunicipalPayloadFactory();
+    $meta = $factory->providerMeta($municipio);
+    $payload = $factory->demo($municipio);
 
-// === LISTAR MUNICÍPIOS DISPONÍVEIS ===
-echo "1️⃣ MUNICÍPIOS CONFIGURADOS\n";
-echo "---------------------------\n";
+    $config = ProviderRegistry::getInstance()->getConfig($meta['provider_key']);
+    $config['certificate'] = NFSeMunicipalPreviewSupport::makeCertificate('Preview ' . ucfirst($municipio));
+    $config['prestador'] = $payload['prestador'];
+    $config['soap_transport'] = NFSeMunicipalPreviewSupport::makeTransport($municipio);
+
+    $providerClass = $config['provider_class'];
+    $provider = new $providerClass($config);
+    $provider->emitir($payload);
+
+    if (!$provider instanceof NFSeOperationalIntrospectionInterface) {
+        throw new RuntimeException("Provider {$providerClass} nao suporta introspeccao.");
+    }
+
+    return [
+        'provider_class' => $providerClass,
+        'payload' => $payload,
+        'request_xml' => $provider->getLastRequestXml(),
+        'parsed_response' => $provider->getLastResponseData(),
+    ];
+}
+
+echo "NFSe MULTI-MUNICIPIO - EXEMPLO CONSISTENTE\n";
+echo "=========================================\n\n";
 
 $fiscal = new FiscalFacade();
 $municipios = $fiscal->nfse()->listarMunicipios();
 
-if ($municipios->isSuccess()) {
-    $data = $municipios->getData();
-    $municipiosValidos = array_filter($data['municipios'], function($m) {
-        return !str_starts_with($m, '_'); // Remove templates e comentários
-    });
-    
-    echo "✅ Municípios configurados: " . implode(', ', $municipiosValidos) . "\n";
-    echo "📊 Total: " . count($municipiosValidos) . " municípios\n\n";
-    
-    // === TESTAR CADA MUNICÍPIO ===
-    echo "2️⃣ VALIDAÇÃO POR MUNICÍPIO\n";
-    echo "---------------------------\n";
-    
-    foreach ($municipiosValidos as $municipio) {
-        $nfse = new NFSeFacade($municipio);
-        $info = $nfse->getProviderInfo();
-        
-        if ($info->isSuccess()) {
-            $data = $info->getData();
-            $providerClass = basename($data['provider_class']);
-            echo "✅ {$municipio}: {$providerClass}\n";
-        } else {
-            echo "❌ {$municipio}: " . $info->getError() . "\n";
-        }
-    }
-    
-} else {
-    echo "❌ Erro: " . $municipios->getError() . "\n";
+echo "1. Municipios configurados\n";
+echo "--------------------------\n";
+
+if (!$municipios->isSuccess()) {
+    echo "Erro ao listar municipios: " . $municipios->getError() . PHP_EOL;
+    exit(1);
 }
 
-// === EXEMPLO DE USO PRÁTICO ===
-echo "\n3️⃣ EXEMPLO PRÁTICO: Emissão Multi-Município\n";
-echo "-------------------------------------------\n";
+$lista = $municipios->getData('municipios') ?? [];
+echo "Municipios ativos: " . implode(', ', $lista) . PHP_EOL . PHP_EOL;
 
-$dadosBasicos = [
-    'prestador' => [
-        'cnpj' => '11222333000181',
-        'inscricao_municipal' => '123456'
-    ],
-    'tomador' => [
-        'cnpj' => '99888777000161',
-        'razao_social' => 'Cliente LTDA'
-    ],
-    'servico' => [
-        'codigo' => '1.01',
-        'descricao' => 'Consultoria em TI',
-        'valor' => 1500.00
-    ]
-];
+echo "2. Providers resolvidos\n";
+echo "-----------------------\n";
 
-$municipiosParaTeste = ['curitiba', 'joinville'];
+foreach ($lista as $municipio) {
+    $info = (new NFSeFacade($municipio))->getProviderInfo();
+    if (!$info->isSuccess()) {
+        echo "[ERRO] {$municipio}: " . $info->getError() . PHP_EOL;
+        continue;
+    }
 
-foreach ($municipiosParaTeste as $municipio) {
-    echo "\n📋 Testando {$municipio}:\n";
-    
-    // Criar facade específico para o município
-    $nfse = new NFSeFacade($municipio);
-    
-    // Validar configuração primeiro
-    $validacao = $nfse->validarMunicipio();
-    if ($validacao->isSuccess()) {
-        echo "  ✅ Configuração: OK\n";
-        
-        // Tentar emitir (em ambiente de teste)
-        $emissao = $nfse->emitir($dadosBasicos);
-        if ($emissao->isSuccess()) {
-            $data = $emissao->getData();
-            echo "  ✅ Emissão: " . ($data['type'] ?? 'sucesso') . "\n";
-        } else {
-            echo "  ℹ️ Emissão: " . $emissao->getError() . "\n";
-        }
-        
-    } else {
-        echo "  ❌ Configuração: " . $validacao->getError() . "\n";
+    $data = $info->getData();
+    echo sprintf(
+        "[OK] %s -> %s (%s)\n",
+        $municipio,
+        basename(str_replace('\\', '/', (string) $data['provider_class'])),
+        (string) $data['provider_key']
+    );
+}
+
+echo PHP_EOL;
+echo "3. Preview de emissao por municipio\n";
+echo "----------------------------------\n";
+
+$previewMunicipios = ['belem', 'joinville'];
+foreach ($previewMunicipios as $municipio) {
+    echo PHP_EOL . strtoupper($municipio) . PHP_EOL;
+    echo str_repeat('-', strlen($municipio)) . PHP_EOL;
+
+    $preview = previewMunicipalProvider($municipio);
+    $payload = $preview['payload'];
+    $response = $preview['parsed_response'];
+
+    echo "Provider: " . $preview['provider_class'] . PHP_EOL;
+    echo "Prestador: " . $payload['prestador']['cnpj'] . " / IM " . $payload['prestador']['inscricaoMunicipal'] . PHP_EOL;
+    echo "Servico: " . $payload['servico']['descricao'] . PHP_EOL;
+    echo "Valor: R$ " . number_format((float) $payload['valor_servicos'], 2, ',', '.') . PHP_EOL;
+    echo "Status preview: " . ($response['status'] ?? 'desconhecido') . PHP_EOL;
+
+    if (isset($response['nfse']['numero'])) {
+        echo "Numero preview: " . $response['nfse']['numero'] . PHP_EOL;
+    }
+
+    if (isset($response['protocolo'])) {
+        echo "Protocolo preview: " . $response['protocolo'] . PHP_EOL;
     }
 }
 
-// === GERENCIAMENTO DINÂMICO ===
-echo "\n4️⃣ GERENCIAMENTO DINÂMICO\n";
-echo "-------------------------\n";
-
-class GerenciadorNFSe 
-{
-    private array $instances = [];
-    
-    public function getInstance(string $municipio): NFSeFacade
-    {
-        if (!isset($this->instances[$municipio])) {
-            $this->instances[$municipio] = new NFSeFacade($municipio);
-        }
-        return $this->instances[$municipio];
-    }
-    
-    public function emitirPorMunicipio(string $municipio, array $dados): array
-    {
-        $nfse = $this->getInstance($municipio);
-        $resultado = $nfse->emitir($dados);
-        
-        return [
-            'municipio' => $municipio,
-            'sucesso' => $resultado->isSuccess(),
-            'dados' => $resultado->getData(),
-            'erro' => $resultado->isError() ? $resultado->getError() : null
-        ];
-    }
-    
-    public function getStatus(): array
-    {
-        $status = [];
-        foreach ($this->instances as $municipio => $instance) {
-            $info = $instance->getProviderInfo();
-            $status[$municipio] = [
-                'configurado' => $info->isSuccess(),
-                'provider' => $info->isSuccess() ? 
-                    basename($info->getData()['provider_class']) : 
-                    'erro'
-            ];
-        }
-        return $status;
-    }
-}
-
-$gerenciador = new GerenciadorNFSe();
-
-// Teste com múltiplos municípios
-$resultados = [];
-foreach (['curitiba', 'joinville'] as $municipio) {
-    $resultados[] = $gerenciador->emitirPorMunicipio($municipio, $dadosBasicos);
-}
-
-echo "📊 Resultados consolidados:\n";
-foreach ($resultados as $resultado) {
-    $icon = $resultado['sucesso'] ? '✅' : '❌';
-    $status = $resultado['sucesso'] ? 'OK' : $resultado['erro'];
-    echo "  {$icon} {$resultado['municipio']}: {$status}\n";
-}
-
-echo "\n🎯 CENÁRIOS DE USO:\n";
-echo "• Empresa com filiais em múltiplos municípios\n";
-echo "• Software house atendendo diversos clientes\n";
-echo "• Contabilidade gerenciando várias empresas\n";
-echo "• Sistema SaaS multi-tenant\n";
-
-echo "\n💡 VANTAGENS:\n";
-echo "✅ Configuração independente por município\n";
-echo "✅ Providers específicos para cada prefeitura\n";
-echo "✅ Cache automático de instâncias\n";
-echo "✅ Error handling isolado por município\n";
-echo "✅ Facilita manutenção e atualizações\n";
+echo PHP_EOL;
+echo "4. Observacoes\n";
+echo "--------------\n";
+echo "- Este exemplo usa payloads validos por provider e transporte mockado.\n";
+echo "- Belem exige classificacao explicita de nao-MEI no payload municipal.\n";
+echo "- Joinville exige codigo_municipio e aliquota coerentes no servico.\n";
+echo "- Para envio real em homologacao, use os scripts em examples/homologacao/.\n";

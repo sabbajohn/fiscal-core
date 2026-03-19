@@ -123,8 +123,19 @@ php examples/basico/03-consultas-publicas.php
 # Múltiplos municípios NFSe
 php examples/avancado/01-multiplos-municipios.php
 
+# Emissão municipal funcional em preview local
+php examples/avancado/03-emissao-municipal-funcional.php
+
 # Error handling robusto
 php examples/avancado/02-error-handling.php
+
+# Homologação municipal segura
+php examples/homologacao/01-emitir-belem-real.php
+php examples/homologacao/02-emitir-joinville-real.php
+
+# Ou sobrescrevendo documento/CEP do tomador
+php examples/homologacao/01-emitir-belem-real.php --tomador-doc=00980556236 --tomador-cep=66065112
+php examples/homologacao/02-emitir-joinville-real.php --tomador-doc=00980556236 --tomador-cep=89220650
 ```
 
 ### 📖 **Guia Completo**
@@ -141,12 +152,13 @@ php examples/GuiaCompletoDeUso.php
 ### 🔐 **Certificados NFe/NFCe**
 
 ```bash
-# Coloque seu certificado .pfx em:
-certs/certificado.pfx
+# Configure via environment
+export FISCAL_CERT_PATH="/caminho/para/certificado.pfx"
+export FISCAL_CERT_PASSWORD="senha_do_certificado"
+export FISCAL_IM="sua_inscricao_municipal"
 
-# Configure via environment ou código
-export NFE_CERT_PATH="/caminho/para/certificado.pfx"
-export NFE_CERT_PASS="senha_do_certificado"
+# Certificados PKCS#12 legados podem exigir OpenSSL legacy
+export OPENSSL_CONF="/caminho/para/openssl.cnf"
 ```
 
 ### 💰 **IBPT (Tributação)**
@@ -159,16 +171,9 @@ export IBPT_UF="SP"
 
 ### 🏘️ **NFSe Municípios**
 
-```json
-// config/nfse-municipios.json
-{
-    "sao_paulo": {
-        "codigo": "3550308",
-        "provider": "SaoPauloProvider",
-        "ambiente": "homologacao"
-    }
-}
-```
+- O catálogo municipal atual está em `config/nfse/`
+- `FISCAL_IM` continua obrigatório para emissões municipais reais
+- A consulta pública de CNPJ ajuda com razão social/contato/endereço, mas não fornece inscrição municipal
 
 ## Uso Detalhado
 
@@ -207,18 +212,21 @@ file_put_contents('danfe.pdf', $danfePdf->dados);
 ### 3) **NFSe: múltiplos municípios**
 
 ```php
-use Fiscal\Facade\NFSeFacade;
+use freeline\FiscalCore\Facade\NFSeFacade;
 
-$nfse = new NFSeFacade();
+$nfse = new NFSeFacade('joinville');
 
-// Emitir NFSe para São Paulo
-$resultado = $nfse->emitir('sao_paulo', $dadosServico);
-if ($resultado->sucesso) {
-    echo "NFSe emitida: " . $resultado->dados['numero'];
+$resultado = $nfse->emitir($dadosServico);
+if ($resultado->isSuccess()) {
+    $data = $resultado->getData();
+    echo "NFSe processada pelo provider: " . $data['emissao']['effective_provider_class'];
 }
 
-// Consultar NFSe
-$consulta = $nfse->consultar('sao_paulo', ['numero' => '123']);
+$consulta = $nfse->consultarPorRps([
+    'numero' => '1001',
+    'serie' => 'A1',
+    'tipo' => '1',
+]);
 ```
 
 ### 4) **Consultas Públicas**
