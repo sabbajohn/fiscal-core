@@ -110,11 +110,11 @@ ENV);
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('FISCAL_IM');
 
-        $service->preview('joinville', '11222333000181', [
+        $service->preview('joinville', '000000000000000', [
             'env_path' => $envPath,
             'env_overrides' => [
-                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026-senha-free2026.pfx',
-                'FISCAL_CERT_PASSWORD' => 'free2026',
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert2026.pfx',
+                'FISCAL_CERT_PASSWORD' => '2026',
             ],
         ]);
     }
@@ -145,11 +145,11 @@ ENV);
             ]
         );
 
-        $result = $service->preview('belem', '18171321000114', [
+        $result = $service->preview('belem', '000000000000000', [
             'env_path' => $envPath,
             'env_overrides' => [
-                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert_faives_41954766000192_SENHA_12345678.p12',
-                'FISCAL_CERT_PASSWORD' => '12345678',
+                'FISCAL_CERT_PATH' => $this->projectRoot . '/certs/cert.p12',
+                'FISCAL_CERT_PASSWORD' => '',
                 'OPENSSL_CONF' => $this->projectRoot . '/openssl.cnf',
             ],
         ]);
