@@ -1,31 +1,18 @@
 {
-    "generated_at": "2026-03-18T19:28:51+00:00",
+    "generated_at": "2026-03-19T11:14:17+00:00",
     "source_base": "Uninfe/source/NFe.Components.Wsdl/NFse/schemas/NFSe",
     "target_base": "resources/nfse/schemas",
     "mode": "selected",
     "custom_schema_families": {
-        "BELEM_MUNICIPAL_2025": "scripts/nfse/schema-overrides/BELEM_MUNICIPAL_2025"
+        "BELEM_MUNICIPAL_2025": "scripts/nfse/schema-overrides/BELEM_MUNICIPAL_2025",
+        "PUBLICA": "scripts/nfse/schema-overrides/PUBLICA"
     },
     "families": {
-        "BELEM_MUNICIPAL_2025": {
-            "status": "imported",
-            "files": 4,
-            "source_kind": "custom_override",
-            "source": "scripts/nfse/schema-overrides/BELEM_MUNICIPAL_2025",
-            "target": "resources/nfse/schemas/BELEM_MUNICIPAL_2025"
-        },
-        "MANAUS_AM": {
-            "status": "imported",
-            "files": 2,
-            "source_kind": "uninfe",
-            "source": "Uninfe/source/NFe.Components.Wsdl/NFse/schemas/NFSe/MANAUS_AM",
-            "target": "resources/nfse/schemas/MANAUS_AM"
-        },
         "PUBLICA": {
             "status": "imported",
-            "files": 2,
-            "source_kind": "uninfe",
-            "source": "Uninfe/source/NFe.Components.Wsdl/NFse/schemas/NFSe/PUBLICA",
+            "files": 3,
+            "source_kind": "custom_override",
+            "source": "scripts/nfse/schema-overrides/PUBLICA",
             "target": "resources/nfse/schemas/PUBLICA"
         }
     },

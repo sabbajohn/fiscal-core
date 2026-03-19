@@ -56,7 +56,7 @@ final class BelemMunicipalProviderTest extends TestCase
         $this->assertStringContainsString('http://www.w3.org/2000/09/xmldsig#', $requestXml);
 
         $validation = (new NFSeSchemaValidator())->validate(
-            $requestXml,
+            $this->schemaCompatibleXml($requestXml),
             (new NFSeSchemaResolver())->resolve('BELEM_MUNICIPAL_2025', 'emitir')
         );
         $this->assertTrue($validation['valid'], implode(PHP_EOL, $validation['errors']));
@@ -65,14 +65,44 @@ final class BelemMunicipalProviderTest extends TestCase
         $dom->loadXML($requestXml);
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
-        $referenceUri = $xpath->evaluate('string(//ds:Signature/ds:SignedInfo/ds:Reference/@URI)');
-        $this->assertSame('#LOTE-BELEM-2026-1', $referenceUri);
+        $references = [];
+        foreach ($xpath->query('//ds:Signature/ds:SignedInfo/ds:Reference/@URI') as $node) {
+            $references[] = $node->nodeValue;
+        }
+        sort($references);
+        $this->assertSame(['#LOTE-BELEM-2026-1', '#RPS-BELEM-2026-1'], $references);
+
+        $signatureMethods = [];
+        foreach ($xpath->query('//ds:Signature/ds:SignedInfo/ds:SignatureMethod/@Algorithm') as $node) {
+            $signatureMethods[] = $node->nodeValue;
+        }
+        $this->assertSame(
+            [
+                'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+                'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            ],
+            $signatureMethods
+        );
+
+        $digestMethods = [];
+        foreach ($xpath->query('//ds:Signature/ds:SignedInfo/ds:Reference/ds:DigestMethod/@Algorithm') as $node) {
+            $digestMethods[] = $node->nodeValue;
+        }
+        $this->assertSame(
+            [
+                'http://www.w3.org/2000/09/xmldsig#sha1',
+                'http://www.w3.org/2000/09/xmldsig#sha1',
+            ],
+            $digestMethods
+        );
 
         $envelope = $provider->getLastSoapEnvelope();
         $this->assertIsString($envelope);
         $this->assertStringContainsString('<nfse:cabecalho>', $envelope);
         $this->assertStringContainsString('<nfse:versaoDados>2.03</nfse:versaoDados>', $envelope);
         $this->assertStringContainsString('<svc:RecepcionarLoteRpsSincrono>', $envelope);
+        $this->assertStringContainsString($requestXml, $envelope);
+        $this->assertStringNotContainsString('<nfse:EnviarLoteRpsSincronoEnvio', $envelope);
 
         $parsed = $provider->getLastResponseData();
         $this->assertSame('success', $parsed['status']);
@@ -111,7 +141,7 @@ final class BelemMunicipalProviderTest extends TestCase
         $this->assertStringContainsString('<svc:ConsultarLoteRps>', $provider->getLastSoapEnvelope());
 
         $validation = (new NFSeSchemaValidator())->validate(
-            (string) $provider->getLastRequestXml(),
+            $this->schemaCompatibleXml((string) $provider->getLastRequestXml()),
             (new NFSeSchemaResolver())->resolve('BELEM_MUNICIPAL_2025', 'consultar_lote')
         );
         $this->assertTrue($validation['valid'], implode(PHP_EOL, $validation['errors']));
@@ -147,7 +177,7 @@ final class BelemMunicipalProviderTest extends TestCase
         $this->assertStringContainsString('<svc:ConsultarNfsePorRps>', $provider->getLastSoapEnvelope());
 
         $validation = (new NFSeSchemaValidator())->validate(
-            (string) $provider->getLastRequestXml(),
+            $this->schemaCompatibleXml((string) $provider->getLastRequestXml()),
             (new NFSeSchemaResolver())->resolve('BELEM_MUNICIPAL_2025', 'consultar_nfse_rps')
         );
         $this->assertTrue($validation['valid'], implode(PHP_EOL, $validation['errors']));
@@ -185,7 +215,7 @@ final class BelemMunicipalProviderTest extends TestCase
         $this->assertStringContainsString('<svc:CancelarNfse>', $provider->getLastSoapEnvelope());
 
         $validation = (new NFSeSchemaValidator())->validate(
-            (string) $provider->getLastRequestXml(),
+            $this->schemaCompatibleXml((string) $provider->getLastRequestXml()),
             (new NFSeSchemaResolver())->resolve('BELEM_MUNICIPAL_2025', 'cancelar_nfse')
         );
         $this->assertTrue($validation['valid'], implode(PHP_EOL, $validation['errors']));
@@ -415,5 +445,19 @@ final class BelemMunicipalProviderTest extends TestCase
         }
 
         return new BelemMunicipalProvider($config);
+    }
+
+    private function schemaCompatibleXml(string $xml): string
+    {
+        if (str_contains($xml, 'xmlns="http://www.abrasf.org.br/nfse.xsd"')) {
+            return $xml;
+        }
+
+        return preg_replace(
+            '/^<([A-Za-z0-9_:-]+)/',
+            '<$1 xmlns="http://www.abrasf.org.br/nfse.xsd"',
+            $xml,
+            1
+        ) ?: $xml;
     }
 }

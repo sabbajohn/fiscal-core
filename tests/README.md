@@ -107,6 +107,12 @@ export FISCAL_DEBUG=false
 
 # Habilitar testes com APIs externas
 export ENABLE_EXTERNAL_TESTS=true
+export ENABLE_NFSE_MUNICIPAL_REAL_TESTS=true
+
+# NFSe municipal real de homologação
+# Se não informar, os testes usam o CPF padrão 00980556236
+export TEST_NFSE_BELEM_TOMADOR_DOC="00980556236"
+export TEST_NFSE_JOINVILLE_TOMADOR_DOC="00980556236"
 
 # IBPT para testes tributários (opcional)
 export IBPT_TEST_CNPJ="11222333000181"

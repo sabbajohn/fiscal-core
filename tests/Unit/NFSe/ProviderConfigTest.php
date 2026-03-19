@@ -44,6 +44,7 @@ final class ProviderConfigTest extends TestCase
         $this->assertSame('PUBLICA', $data['provider_key']);
         $this->assertSame('4209102', $data['codigo_municipio']);
         $this->assertStringContainsString('PublicaProvider', $data['provider_class']);
+        $this->assertContains('consultar_nfse_rps', $data['supported_operations']);
     }
 
     public function testFacadeFallsBackToNationalForUnknownMunicipio(): void

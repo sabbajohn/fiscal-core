@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GerarNfseResposta xmlns="http://www.publica.inf.br">
+  <ListaNfse>
+    <CompNfse>
+      <Nfse>
+        <InfNfse>
+          <Numero>202600000000123</Numero>
+          <CodigoVerificacao>AB12-CD34</CodigoVerificacao>
+          <DataEmissao>2026-03-19T09:20:00</DataEmissao>
+          <IdentificacaoRps>
+            <Numero>1001</Numero>
+            <Serie>A1</Serie>
+            <Tipo>1</Tipo>
+          </IdentificacaoRps>
+          <DataEmissaoRps>2026-03-19</DataEmissaoRps>
+          <NaturezaOperacao>16</NaturezaOperacao>
+          <OptanteSimplesNacional>1</OptanteSimplesNacional>
+          <IncentivadorCultural>2</IncentivadorCultural>
+          <Competencia>2026-03</Competencia>
+          <Servico>
+            <Valores>
+              <ValorServicos>1500.00</ValorServicos>
+              <ValorIss>30.00</ValorIss>
+              <Aliquota>2.00</Aliquota>
+              <ValorLiquidoNfse>1500.00</ValorLiquidoNfse>
+            </Valores>
+            <ItemListaServico>11.01</ItemListaServico>
+            <Discriminacao>Desenvolvimento e licenciamento de software.</Discriminacao>
+            <CodigoMunicipio>4209102</CodigoMunicipio>
+          </Servico>
+          <PrestadorServico>
+            <IdentificacaoPrestador>
+              <Cnpj>99999999000199</Cnpj>
+              <InscricaoMunicipal>******</InscricaoMunicipal>
+            </IdentificacaoPrestador>
+            <RazaoSocial>PRESTADOR SANITIZADO LTDA</RazaoSocial>
+          </PrestadorServico>
+          <TomadorServico>
+            <IdentificacaoTomador>
+              <CpfCnpj>
+                <Cnpj>88888888000188</Cnpj>
+              </CpfCnpj>
+            </IdentificacaoTomador>
+            <RazaoSocial>TOMADOR SANITIZADO LTDA</RazaoSocial>
+          </TomadorServico>
+          <OrgaoGerador>
+            <CodigoMunicipio>4209102</CodigoMunicipio>
+            <Uf>SC</Uf>
+          </OrgaoGerador>
+        </InfNfse>
+      </Nfse>
+    </CompNfse>
+  </ListaNfse>
+</GerarNfseResposta>

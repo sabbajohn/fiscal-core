@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\TestCase;
+
+final class NFSeMunicipalExamplesTest extends TestCase
+{
+    public function testMultiplosMunicipiosExampleRunsWithConsistentPayloads(): void
+    {
+        $output = $this->runScript('examples/avancado/01-multiplos-municipios.php');
+
+        $this->assertStringContainsString('Status preview: success', $output);
+        $this->assertStringContainsString('Numero preview: 1105', $output);
+        $this->assertStringContainsString('Numero preview: 202600000000123', $output);
+        $this->assertStringNotContainsString('Dados inválidos', $output);
+    }
+
+    public function testFunctionalMunicipalEmissionExampleRunsWithoutCallingPrefeitura(): void
+    {
+        $output = $this->runScript('examples/avancado/03-emissao-municipal-funcional.php');
+
+        $this->assertStringContainsString('Status parseado: success', $output);
+        $this->assertStringContainsString('Nenhuma prefeitura foi acionada neste exemplo.', $output);
+        $this->assertStringContainsString('202600000000123', $output);
+    }
+
+    private function runScript(string $relativePath): string
+    {
+        $script = dirname(__DIR__, 2) . '/' . $relativePath;
+        $command = sprintf('php %s 2>&1', escapeshellarg($script));
+        exec($command, $lines, $exitCode);
+
+        $output = implode(PHP_EOL, $lines);
+        $this->assertSame(0, $exitCode, $output);
+
+        return $output;
+    }
+}

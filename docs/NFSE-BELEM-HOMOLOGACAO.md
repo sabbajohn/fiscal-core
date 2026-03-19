@@ -12,6 +12,8 @@ Este guia cobre o provider municipal atual de Belém no `fiscal-core` com foco e
 - PHP com `ext-dom`, `ext-openssl` e `ext-curl`
 - certificado A1 válido
 - ambiente configurado como `homologacao`
+- `FISCAL_IM` configurado para a inscrição municipal do prestador
+- `OPENSSL_CONF` apontando para um `openssl.cnf` com provider `legacy` quando o certificado for PKCS#12 legado
 - prestador configurado com:
   - `cnpj`
   - `inscricaoMunicipal`
@@ -77,3 +79,5 @@ $config['prestador'] = [
     'codigo_municipio' => '1501402',
 ];
 ```
+
+Para scripts reais deste repositório, o CNPJ do tomador pode ser enriquecido via consulta pública, mas a inscrição municipal do prestador continua vindo de `FISCAL_IM`.

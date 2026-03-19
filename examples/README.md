@@ -16,9 +16,11 @@ examples/
 │   └── 04-operacoes-fiscais.php      # Operações fiscais com NFe - FiscalFacade
 ├── 📁 avancado/                      # Exemplos para uso profissional
 │   ├── 01-multiplos-municipios.php   # Gerenciar múltiplos municípios NFSe
-│   └── 02-error-handling.php         # Tratamento robusto de erros
-└── 🧪 Testes unitários               # Validação de regras de negócio
-    └── tests/Unit/                   # Testes focados em tributação
+│   ├── 02-error-handling.php         # Tratamento robusto de erros
+│   └── 03-emissao-municipal-funcional.php # Preview funcional de emissão municipal
+└── 📁 homologacao/                   # Scripts seguros para prefeitura
+    ├── 01-emitir-belem-real.php      # Belém com certificado Faives
+    └── 02-emitir-joinville-real.php  # Joinville com certificado Freeline
 ```
 
 ## 🚀 Como Começar
@@ -43,6 +45,15 @@ php examples/basico/03-consultas-publicas.php   # CEP, CNPJ, bancos, validaçõe
 # Exemplos avançados (produção)
 php examples/avancado/01-multiplos-municipios.php
 php examples/avancado/02-error-handling.php
+php examples/avancado/03-emissao-municipal-funcional.php
+
+# Scripts de homologação municipal
+php examples/homologacao/01-emitir-belem-real.php
+php examples/homologacao/02-emitir-joinville-real.php
+
+# Ou sobrescrevendo o documento/CEP do tomador
+php examples/homologacao/01-emitir-belem-real.php --tomador-doc=00980556236 --tomador-cep=66065112
+php examples/homologacao/02-emitir-joinville-real.php --tomador-doc=00980556236 --tomador-cep=89220650
 ```
 
 ## 📋 Funcionalidades por Exemplo
@@ -56,6 +67,8 @@ php examples/avancado/02-error-handling.php
 | **04-operacoes-fiscais** | Contexto fiscal completo | FiscalFacade |
 | **01-multiplos-municipios** | Gestão NFSe multi-município | FiscalFacade |
 | **02-error-handling** | Tratamento robusto de erros | Ambos |
+| **03-emissao-municipal-funcional** | Preview local de emissão municipal | Providers municipais |
+| **homologacao/** | Scripts reais com preview seguro e `--send` explícito | NFSeMunicipalHomologationService |
 
 ## 🎭 Separação de Responsabilidades
 
@@ -80,9 +93,11 @@ Para exemplos mais avançados, você pode configurar:
 ### 📜 **Certificados NFe/NFCe**
 
 ```bash
-# Coloque seus certificados em:
-certs/certificado.pfx
-# Configure no ambiente
+# Configure no ambiente:
+export FISCAL_CERT_PATH="/caminho/para/certificado.pfx"
+export FISCAL_CERT_PASSWORD="senha_do_certificado"
+export FISCAL_IM="inscricao_municipal_do_prestador"
+export OPENSSL_CONF="/caminho/para/openssl.cnf" # para PKCS#12 legado
 ```
 
 ### 💰 **IBPT (Tributação)**
@@ -95,10 +110,9 @@ export IBPT_UF="SP"
 
 ### 🏘️ **NFSe Municípios**
 
-```bash
-# Edite config/nfse-municipios.json
-# Adicione seus municípios específicos
-```
+- O catálogo municipal atual fica em `config/nfse/`
+- O enrich por CNPJ não substitui `FISCAL_IM`
+- Os scripts de homologação usam preview por padrão e só enviam com `--send`
 
 ## 🎯 Casos de Uso por Público
 

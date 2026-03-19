@@ -26,3 +26,5 @@ tests/logs/testdox.html
 
 
 Uninfe
+.phpunit.cache/*
+coverage-html/*

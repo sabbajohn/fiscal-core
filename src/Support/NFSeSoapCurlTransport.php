@@ -14,14 +14,15 @@ final class NFSeSoapCurlTransport implements NFSeSoapTransportInterface
             throw new RuntimeException('Extensão cURL é obrigatória para transporte SOAP municipal.');
         }
 
-        $headers = array_merge(
-            [
-                'Content-Type: text/xml; charset=utf-8',
-                'SOAPAction: "' . ($options['soap_action'] ?? '') . '"',
-                'Content-Length: ' . strlen($envelope),
-            ],
-            $options['headers'] ?? []
-        );
+        $headers = [
+            'Content-Type: text/xml; charset=utf-8',
+            'Content-Length: ' . strlen($envelope),
+        ];
+        $soapAction = $options['soap_action'] ?? null;
+        if (is_string($soapAction) && trim($soapAction) !== '') {
+            $headers[] = 'SOAPAction: "' . $soapAction . '"';
+        }
+        $headers = array_merge($headers, $options['headers'] ?? []);
 
         $timeout = max(1, (int) ($options['timeout'] ?? 30));
 

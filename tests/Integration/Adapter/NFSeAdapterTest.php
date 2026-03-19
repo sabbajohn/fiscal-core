@@ -15,6 +15,8 @@ final class NFSeAdapterTest extends TestCase
 
         $this->assertSame('PUBLICA', $info['provider_key']);
         $this->assertStringContainsString('PublicaProvider', $info['provider_class']);
+        $this->assertContains('consultar_lote', $info['supported_operations']);
+        $this->assertContains('cancelar_nfse', $info['supported_operations']);
     }
 
     public function testBelemUsesCurrentMunicipalProvider(): void

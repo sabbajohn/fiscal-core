@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/Fixtures/NFSePilotPayloads.php';
 require_once dirname(__DIR__, 2) . '/Fixtures/NFSeBelemMunicipalFixtures.php';
+require_once dirname(__DIR__, 2) . '/Fixtures/NFSeJoinvilleMunicipalFixtures.php';
 
 use freeline\FiscalCore\Providers\NFSe\Municipal\BelemMunicipalProvider;
 use freeline\FiscalCore\Providers\NFSe\Municipal\ManausAmProvider;
@@ -39,6 +40,21 @@ final class PilotProviderXmlValidationTest extends TestCase
             };
             $config['certificate'] = NFSeBelemMunicipalFixtures::makeCertificate();
             $provider = new BelemMunicipalProvider($config);
+        } elseif ($municipio === 'joinville') {
+            $config = ProviderRegistry::getInstance()->getConfig('PUBLICA');
+            $config['soap_transport'] = new class implements NFSeSoapTransportInterface {
+                public function send(string $endpoint, string $envelope, array $options = []): array
+                {
+                    return [
+                        'request_xml' => $envelope,
+                        'response_xml' => NFSeJoinvilleMunicipalFixtures::successSoapResponse(),
+                        'status_code' => 200,
+                        'headers' => [],
+                    ];
+                }
+            };
+            $config['certificate'] = NFSeJoinvilleMunicipalFixtures::makeCertificate();
+            $provider = new PublicaProvider($config);
         } else {
             $registry = ProviderRegistry::getInstance();
             $provider = $registry->getByMunicipio($municipio);
@@ -47,7 +63,7 @@ final class PilotProviderXmlValidationTest extends TestCase
         $this->assertInstanceOf($expectedClass, $provider);
 
         $xml = $provider->emitir($payload);
-        if ($municipio === 'belem') {
+        if (in_array($municipio, ['belem', 'joinville'], true)) {
             $xml = $provider->getLastRequestXml();
         }
 

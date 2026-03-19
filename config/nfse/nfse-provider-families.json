@@ -82,12 +82,26 @@
             "consultar_nfse_rps": "schema_nfse_v03.xsd",
             "cancelar_nfse": "schema_nfse_v03.xsd"
         },
-        "aliquota_format": "decimal",
+        "aliquota_format": "percentual",
         "transport": "soap",
         "versao": "3.00",
         "codigo_municipio": "4209102",
         "municipio_nome": "Joinville",
-        "wsdl": ""
+        "wsdl_homologacao": "https://nfsehomologacao.joinville.sc.gov.br/nfse_integracao/Services?wsdl",
+        "wsdl_producao": "https://nfem.joinville.sc.gov.br/nfse_integracao/Services?wsdl",
+        "consultas_wsdl_homologacao": "https://nfsehomologacao.joinville.sc.gov.br/nfse_integracao/Consultas?wsdl",
+        "consultas_wsdl_producao": "https://nfem.joinville.sc.gov.br/nfse_integracao/Consultas?wsdl",
+        "signature_mode": "required",
+        "signature_algorithm": "sha1",
+        "soap_style": "rpc_literal",
+        "soap_namespace": "http://service.nfse.integracao.ws.publica/",
+        "supported_operations": [
+            "emitir",
+            "consultar_lote",
+            "consultar_nfse_rps",
+            "cancelar_nfse"
+        ],
+        "source": "custom_override"
     },
     "nfse_nacional": {
         "provider_class": "freeline\\FiscalCore\\Providers\\NFSe\\NacionalProvider",

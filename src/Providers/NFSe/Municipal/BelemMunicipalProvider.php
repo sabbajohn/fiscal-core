@@ -118,7 +118,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
 
-        $root = $dom->createElementNS(self::NFSE_NS, 'EnviarLoteRpsSincronoEnvio');
+        $root = $dom->createElement('EnviarLoteRpsSincronoEnvio');
         $dom->appendChild($root);
 
         $loteRps = $this->appendXmlNode($dom, $root, 'LoteRps');
@@ -303,6 +303,11 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $xpath = new \DOMXPath($dom);
 
         $mensagens = [];
+        $faultString = trim((string) $xpath->evaluate("string(//*[local-name()='Fault']/*[local-name()='faultstring'])"));
+        if ($faultString !== '') {
+            $mensagens[] = $faultString;
+        }
+
         foreach ($xpath->query("//*[local-name()='MensagemRetorno']") as $messageNode) {
             $codigo = trim((string) $xpath->evaluate("string(./*[local-name()='Codigo'])", $messageNode));
             $mensagem = trim((string) $xpath->evaluate("string(./*[local-name()='Mensagem'])", $messageNode));
@@ -382,6 +387,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         return [
             'status' => $mensagens !== [] ? 'error' : ($hasSuccessPayload ? 'success' : 'unknown'),
             'operation_response' => $rootName,
+            'fault' => $faultString !== '' ? ['message' => $faultString] : null,
             'protocolo' => $protocol,
             'numero_lote' => $numeroLote,
             'data_recebimento' => $dataRecebimento,
@@ -490,7 +496,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $prestador = $this->resolvePrestadorContext();
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
-        $root = $dom->createElementNS(self::NFSE_NS, 'ConsultarLoteRpsEnvio');
+        $root = $dom->createElement('ConsultarLoteRpsEnvio');
         $dom->appendChild($root);
 
         $prestadorNode = $this->appendXmlNode($dom, $root, 'Prestador');
@@ -507,7 +513,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $prestador = $this->resolvePrestadorContext($identificacaoRps['prestador'] ?? []);
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
-        $root = $dom->createElementNS(self::NFSE_NS, 'ConsultarNfseRpsEnvio');
+        $root = $dom->createElement('ConsultarNfseRpsEnvio');
         $dom->appendChild($root);
 
         $rpsNode = $this->appendXmlNode($dom, $root, 'IdentificacaoRps');
@@ -529,7 +535,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $codigoCancelamento = $this->resolveCodigoCancelamento($protocolo);
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
-        $root = $dom->createElementNS(self::NFSE_NS, 'CancelarNfseEnvio');
+        $root = $dom->createElement('CancelarNfseEnvio');
         $dom->appendChild($root);
 
         $pedido = $this->appendXmlNode($dom, $root, 'Pedido');
@@ -679,26 +685,154 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         }
 
         return match ($operationKey) {
-            'emitir' => Signer::sign(
-                $certificate,
-                $xml,
-                'LoteRps',
-                'Id',
-                OPENSSL_ALGO_SHA256,
-                Signer::CANONICAL,
-                'EnviarLoteRpsSincronoEnvio'
-            ),
+            'emitir' => $this->assinarXmlEmissao($certificate, $xml),
             'cancelar_nfse' => Signer::sign(
                 $certificate,
                 $xml,
                 'InfPedidoCancelamento',
                 'Id',
-                OPENSSL_ALGO_SHA256,
+                OPENSSL_ALGO_SHA1,
                 Signer::CANONICAL,
                 'CancelarNfseEnvio'
             ),
             default => $xml,
         };
+    }
+
+    private function assinarXmlEmissao(Certificate $certificate, string $xml): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (!@$dom->loadXML($xml)) {
+            throw new \RuntimeException('XML inválido para assinatura da emissão de Belém.');
+        }
+
+        $root = $dom->documentElement;
+        if (!$root instanceof \DOMElement) {
+            throw new \RuntimeException('Raiz do XML não encontrada para assinatura da emissão de Belém.');
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $loteRps = $xpath->query("//*[local-name()='LoteRps']")->item(0);
+        $rpsWrapper = $xpath->query("//*[local-name()='ListaRps']/*[local-name()='Rps']")->item(0);
+        $infDeclaracao = $xpath->query("//*[local-name()='InfDeclaracaoPrestacaoServico']")->item(0);
+
+        if (
+            !$loteRps instanceof \DOMElement
+            || !$rpsWrapper instanceof \DOMElement
+            || !$infDeclaracao instanceof \DOMElement
+        ) {
+            throw new \RuntimeException('Nós obrigatórios para assinatura da emissão de Belém não encontrados.');
+        }
+
+        $this->appendSignatureNode(
+            $dom,
+            $certificate,
+            $rpsWrapper,
+            $infDeclaracao,
+            'Id',
+            OPENSSL_ALGO_SHA1
+        );
+        $this->appendSignatureNode(
+            $dom,
+            $certificate,
+            $root,
+            $loteRps,
+            'Id',
+            OPENSSL_ALGO_SHA1
+        );
+
+        return $dom->saveXML($dom->documentElement) ?: '';
+    }
+
+    private function appendSignatureNode(
+        \DOMDocument $dom,
+        Certificate $certificate,
+        \DOMElement $signatureParent,
+        \DOMElement $signedNode,
+        string $mark,
+        int $algorithm
+    ): void {
+        $nsSignatureMethod = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
+        $nsDigestMethod = 'http://www.w3.org/2000/09/xmldsig#sha1';
+        $digestAlgorithm = 'sha1';
+        if ($algorithm === OPENSSL_ALGO_SHA256) {
+            $nsSignatureMethod = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+            $nsDigestMethod = 'http://www.w3.org/2001/04/xmlenc#sha256';
+            $digestAlgorithm = 'sha256';
+        }
+
+        $signatureNode = $dom->createElementNS(self::DSIG_NS, 'Signature');
+        $signatureParent->appendChild($signatureNode);
+
+        $signedInfoNode = $dom->createElement('SignedInfo');
+        $signatureNode->appendChild($signedInfoNode);
+
+        $canonicalizationMethodNode = $dom->createElement('CanonicalizationMethod');
+        $canonicalizationMethodNode->setAttribute(
+            'Algorithm',
+            'http://www.w3.org/TR/2001/REC-xml-c14n-20010315'
+        );
+        $signedInfoNode->appendChild($canonicalizationMethodNode);
+
+        $signatureMethodNode = $dom->createElement('SignatureMethod');
+        $signatureMethodNode->setAttribute('Algorithm', $nsSignatureMethod);
+        $signedInfoNode->appendChild($signatureMethodNode);
+
+        $referenceNode = $dom->createElement('Reference');
+        $signedInfoNode->appendChild($referenceNode);
+
+        $idSigned = trim($signedNode->getAttribute($mark));
+        $referenceNode->setAttribute('URI', $idSigned !== '' ? '#' . $idSigned : '');
+
+        $transformsNode = $dom->createElement('Transforms');
+        $referenceNode->appendChild($transformsNode);
+
+        $transform1 = $dom->createElement('Transform');
+        $transform1->setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#enveloped-signature');
+        $transformsNode->appendChild($transform1);
+
+        $transform2 = $dom->createElement('Transform');
+        $transform2->setAttribute('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
+        $transformsNode->appendChild($transform2);
+
+        $digestMethodNode = $dom->createElement('DigestMethod');
+        $digestMethodNode->setAttribute('Algorithm', $nsDigestMethod);
+        $referenceNode->appendChild($digestMethodNode);
+
+        $digestValueNode = $dom->createElement(
+            'DigestValue',
+            $this->calculateDigestValue($signedNode, $digestAlgorithm)
+        );
+        $referenceNode->appendChild($digestValueNode);
+
+        $signedInfoCanonical = $signedInfoNode->C14N(true, false, null, null);
+        if ($signedInfoCanonical === false) {
+            throw new \RuntimeException('Falha ao canonicalizar SignedInfo para assinatura de Belém.');
+        }
+
+        $signatureValue = base64_encode($certificate->sign($signedInfoCanonical, $algorithm));
+        $signatureNode->appendChild($dom->createElement('SignatureValue', $signatureValue));
+
+        $keyInfoNode = $dom->createElement('KeyInfo');
+        $signatureNode->appendChild($keyInfoNode);
+
+        $x509DataNode = $dom->createElement('X509Data');
+        $keyInfoNode->appendChild($x509DataNode);
+
+        $x509CertificateNode = $dom->createElement('X509Certificate', $certificate->publicKey->unFormated());
+        $x509DataNode->appendChild($x509CertificateNode);
+    }
+
+    private function calculateDigestValue(\DOMElement $node, string $algorithm): string
+    {
+        $canonical = $node->C14N(true, false, null, null);
+        if ($canonical === false) {
+            throw new \RuntimeException('Falha ao canonicalizar nó assinado de Belém.');
+        }
+
+        return base64_encode(hash($algorithm, $canonical, true));
     }
 
     private function shouldSignOperation(string $operationKey): bool
@@ -732,7 +866,7 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         $resolver = new NFSeSchemaResolver();
         $validator = new NFSeSchemaValidator();
         $schemaPath = $resolver->resolve('BELEM_MUNICIPAL_2025', $operation);
-        $validation = $validator->validate($requestXml, $schemaPath);
+        $validation = $validator->validate($this->normalizeRequestXmlForSchema($requestXml), $schemaPath);
 
         if ($validation['valid']) {
             return;
@@ -746,33 +880,36 @@ class BelemMunicipalProvider extends AbstractNFSeProvider implements NFSeOperati
         );
     }
 
+    private function normalizeRequestXmlForSchema(string $requestXml): string
+    {
+        if (str_contains($requestXml, 'xmlns="' . self::NFSE_NS . '"')) {
+            return $requestXml;
+        }
+
+        return preg_replace(
+            '/^<([A-Za-z0-9_:-]+)/',
+            '<$1 xmlns="' . self::NFSE_NS . '"',
+            $requestXml,
+            1
+        ) ?: $requestXml;
+    }
+
     private function montarSoapEnvelope(string $requestXml, string $soapOperation): string
     {
-        $soap = new \DOMDocument('1.0', 'UTF-8');
-        $soap->preserveWhiteSpace = false;
-        $soap->formatOutput = false;
-
-        $envelope = $soap->createElementNS('http://schemas.xmlsoap.org/soap/envelope/', 'soapenv:Envelope');
-        $envelope->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:svc', self::SERVICE_NS);
-        $envelope->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:nfse', self::NFSE_NS);
-        $soap->appendChild($envelope);
-
-        $header = $soap->createElementNS('http://schemas.xmlsoap.org/soap/envelope/', 'soapenv:Header');
-        $envelope->appendChild($header);
-        $cabecalho = $soap->createElementNS(self::NFSE_NS, 'nfse:cabecalho');
-        $header->appendChild($cabecalho);
-        $cabecalho->appendChild($soap->createElementNS(self::NFSE_NS, 'nfse:versaoDados', (string) $this->getVersao()));
-
-        $body = $soap->createElementNS('http://schemas.xmlsoap.org/soap/envelope/', 'soapenv:Body');
-        $envelope->appendChild($body);
-        $operation = $soap->createElementNS(self::SERVICE_NS, 'svc:' . $soapOperation);
-        $body->appendChild($operation);
-
-        $request = new \DOMDocument('1.0', 'UTF-8');
-        $request->loadXML($requestXml);
-        $operation->appendChild($soap->importNode($request->documentElement, true));
-
-        return $soap->saveXML() ?: '';
+        return sprintf(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"'
+            . ' xmlns:svc="%s" xmlns:nfse="%s">'
+            . '<soapenv:Header><nfse:cabecalho><nfse:versaoDados>%s</nfse:versaoDados></nfse:cabecalho></soapenv:Header>'
+            . '<soapenv:Body><svc:%s>%s</svc:%s></soapenv:Body>'
+            . '</soapenv:Envelope>',
+            self::SERVICE_NS,
+            self::NFSE_NS,
+            htmlspecialchars((string) $this->getVersao(), ENT_XML1 | ENT_QUOTES, 'UTF-8'),
+            $soapOperation,
+            $requestXml,
+            $soapOperation
+        );
     }
 
     private function resolveSoapEndpoint(): string

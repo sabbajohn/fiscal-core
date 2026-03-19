@@ -51,6 +51,42 @@
             }
         },
         {
+            "name": "Emitir NFSe Belem",
+            "type": "php",
+            "request": "launch",
+            "program": "${workspaceRoot}/examples/homologacao/01-emitir-belem-real.php",
+            "cwd": "${workspaceRoot}/examples",
+            "port": 0,
+            "runtimeArgs": [
+                "-dxdebug.start_with_request=yes"
+            ],
+            "env": {
+                "XDEBUG_MODE": "debug,develop",
+                "XDEBUG_CONFIG": "client_port=${port}"
+            },
+            "args":["--tomador-doc=00980556236","--tomador-cep=66065112", "--send"]
+        },
+        {
+            "name": "Emitir NFSe Joinville",
+            "type": "php",
+            "request": "launch",
+            "program": "${workspaceRoot}/examples/homologacao/02-emitir-joinville-real.php",
+            "cwd": "${workspaceRoot}/examples",
+            "port": 0,
+            "runtimeArgs": [
+                "-dxdebug.start_with_request=yes"
+            ],
+            "env": {
+                "XDEBUG_MODE": "debug,develop",
+                "XDEBUG_CONFIG": "client_port=${port}"
+            },
+            "args": [
+                "--tomador-doc=00980556236",
+                "--tomador-cep=89220650",
+                "--send"
+            ]
+        },
+        {
             "name": "Launch Built-in web server",
             "type": "php",
             "request": "launch",
