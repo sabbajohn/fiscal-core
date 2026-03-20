@@ -29,3 +29,4 @@ Uninfe
 .phpunit.cache/*
 coverage-html/*
 examples/producao/saida/*
+platform-api/*
