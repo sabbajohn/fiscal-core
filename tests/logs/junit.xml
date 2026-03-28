@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="FiscalCorePlatformContractTest" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" tests="4" assertions="19" errors="0" failures="0" skipped="0" time="0.014600">
-    <testcase name="test_nfe_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="12" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="5" time="0.010749"/>
-    <testcase name="test_nfce_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="23" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="4" time="0.000889"/>
-    <testcase name="test_nfse_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="33" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="6" time="0.001415"/>
-    <testcase name="test_support_components_keep_platform_required_entrypoints" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="45" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="4" time="0.001547"/>
+  <testsuite name="FiscalCorePlatformContractTest" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" tests="4" assertions="19" errors="0" failures="0" skipped="0" time="0.016529">
+    <testcase name="test_nfe_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="12" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="5" time="0.013121"/>
+    <testcase name="test_nfce_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="23" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="4" time="0.000606"/>
+    <testcase name="test_nfse_facade_keeps_platform_required_contract_methods" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="33" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="6" time="0.001205"/>
+    <testcase name="test_support_components_keep_platform_required_entrypoints" file="/workspace/tests/Unit/Facade/FiscalCorePlatformContractTest.php" line="45" class="FiscalCorePlatformContractTest" classname="FiscalCorePlatformContractTest" assertions="4" time="0.001597"/>
   </testsuite>
 </testsuites>
